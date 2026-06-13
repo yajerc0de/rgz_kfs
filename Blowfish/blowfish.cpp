@@ -348,3 +348,92 @@ bool Blowfish::setKey(const vector<uint8_t>& key) {
     m_keyIsSet = true;
     return true;
 }
+
+// =============================================================================
+//  Вспомогательные функции
+// =============================================================================
+
+// Упаковать два uint32_t в 8 байт (big-endian)
+void Blowfish::packBlock(uint32_t L, uint32_t R, uint8_t* out) {
+    out[0] = (L >> 24) & 0xFF;
+    out[1] = (L >> 16) & 0xFF;
+    out[2] = (L >>  8) & 0xFF;
+    out[3] = (L      ) & 0xFF;
+    out[4] = (R >> 24) & 0xFF;
+    out[5] = (R >> 16) & 0xFF;
+    out[6] = (R >>  8) & 0xFF;
+    out[7] = (R      ) & 0xFF;
+}
+
+// Распаковать 8 байт в два uint32_t (big-endian)
+void Blowfish::unpackBlock(const uint8_t* in, uint32_t& L, uint32_t& R) {
+    L = (static_cast<uint32_t>(in[0]) << 24)
+      | (static_cast<uint32_t>(in[1]) << 16)
+      | (static_cast<uint32_t>(in[2]) <<  8)
+      |  static_cast<uint32_t>(in[3]);
+
+    R = (static_cast<uint32_t>(in[4]) << 24)
+      | (static_cast<uint32_t>(in[5]) << 16)
+      | (static_cast<uint32_t>(in[6]) <<  8)
+      |  static_cast<uint32_t>(in[7]);
+}
+
+// =============================================================================
+//  Функция F — нелинейное преобразование через S-блоки
+//
+//  Разбиваем x на 4 байта: a b c d
+//  F(x) = ((S[0][a] + S[1][b]) XOR S[2][c]) + S[3][d]
+// =============================================================================
+
+uint32_t Blowfish::F(uint32_t x) const {
+    const uint8_t a = (x >> 24) & 0xFF;
+    const uint8_t b = (x >> 16) & 0xFF;
+    const uint8_t c = (x >>  8) & 0xFF;
+    const uint8_t d = (x      ) & 0xFF;
+
+    return ((S[0][a] + S[1][b]) ^ S[2][c]) + S[3][d];
+}
+
+// =============================================================================
+//  encryptBlock — шифрование одного 64-битного блока
+//
+//  Сеть Фейстеля, 16 раундов:
+//    L = L XOR P[i]
+//    R = F(L) XOR R
+//    swap(L, R)
+//  Финальная перестановка (отменяет лишний swap):
+//    R = R XOR P[16]
+//    L = L XOR P[17]
+// =============================================================================
+
+void Blowfish::encryptBlock(uint32_t& L, uint32_t& R) const {
+    for (int i = 0; i < ROUNDS; i++) {
+        L ^= P[i];
+        R ^= F(L);
+        swap(L, R);
+    }
+
+    // Финальная перестановка
+    swap(L, R);
+    R ^= P[ROUNDS];        // P[16]
+    L ^= P[ROUNDS + 1];    // P[17]
+}
+
+// =============================================================================
+//  decryptBlock — дешифрование одного 64-битного блока
+//
+//  Та же сеть Фейстеля, но P-массив применяется в обратном порядке
+// =============================================================================
+
+void Blowfish::decryptBlock(uint32_t& L, uint32_t& R) const {
+    for (int i = ROUNDS + 1; i > 1; i--) {
+        L ^= P[i];
+        R ^= F(L);
+        swap(L, R);
+    }
+
+    // Финальная перестановка
+    swap(L, R);
+    R ^= P[1];
+    L ^= P[0];
+}
