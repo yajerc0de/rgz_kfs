@@ -34,3 +34,13 @@ bool readFile(const string& path, vector<uint8_t>& data);
 // Записать байты в файл в бинарном режиме.
 // При ошибке выводит сообщение в cout и возвращает false.
 bool writeFile(const string& path, const vector<uint8_t>& data);
+
+// ─── Ключи и IV ──────────────────────────────────────────────────────────────
+
+// Сгенерировать случайные байты, сохранить в файл и вывести HEX в консоль.
+// Возвращает сгенерированные байты или пустой вектор при ошибке.
+vector<uint8_t> generateAndSave(const string& filepath, size_t byteCount, const string& label);
+
+// Загрузить байты из файла (ключ или IV).
+// При ошибке выводит сообщение и возвращает пустой вектор.
+vector<uint8_t> loadFromFile(const string& filepath, const string& label);

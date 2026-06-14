@@ -71,3 +71,28 @@ bool writeFile(const string& path, const vector<uint8_t>& data) {
     f.write(reinterpret_cast<const char*>(data.data()), data.size());
     return true;
 }
+
+// =============================================================================
+//  Ключи и IV
+// =============================================================================
+
+vector<uint8_t> generateAndSave(const string& filepath, size_t byteCount, const string& label) {
+    vector<uint8_t> data = randomBytes(byteCount);
+
+    if (!writeFile(filepath, data))
+        return {};
+
+    cout << "  [" << label << "] Сгенерирован и сохранён в: " << filepath << "\n";
+    cout << "  [" << label << "] HEX: " << bytesToHex(data) << "\n";
+    return data;
+}
+
+vector<uint8_t> loadFromFile(const string& filepath, const string& label) {
+    vector<uint8_t> data;
+    if (!readFile(filepath, data))
+        return {};
+
+    cout << "  [" << label << "] Загружен из: " << filepath << "\n";
+    cout << "  [" << label << "] HEX: " << bytesToHex(data) << "\n";
+    return data;
+}

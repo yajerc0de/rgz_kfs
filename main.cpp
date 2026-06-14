@@ -2,6 +2,8 @@
 #include <string>
 #include <limits>
 
+#include "Blowfish/blowfish.h"
+
 using namespace std;
 
 // ─── Прототипы точек входа в модули (будут реализованы позже) ────────────────
@@ -69,11 +71,6 @@ void printNotImplemented(const string& name) {
     cout << "\n";
 }
 
-void printGoodbye() {
-    cout << "\n  До свидания!\n";
-    printSeparator('=');
-}
-
 } // namespace UI
 
 // ─── Заглушки модулей ─────────────────────────────────────────────────────────
@@ -84,12 +81,10 @@ void runSpeck()    { UI::printNotImplemented("Speck");    }
 void runRC5()      { UI::printNotImplemented("RC5");      }
 void runAES()      { UI::printNotImplemented("AES");      }
 void runSerpent()  { UI::printNotImplemented("Serpent");  }
-void runBlowfish() { UI::printNotImplemented("Blowfish"); }
 void runTEA()      { UI::printNotImplemented("TEA");      }
 // ─────────────────────────────────────────────────────────────────────────────
 
 int main() {
-    // Корректный вывод кириллицы в Windows (для Linux не нужно)
 #ifdef _WIN32
     system("chcp 65001 > nul");
 #endif
@@ -118,6 +113,5 @@ int main() {
         }
     }
 
-    UI::printGoodbye();
     return 0;
 }
