@@ -90,13 +90,13 @@ AppMode show_main_menu() {
     std::cout << "  [0] Выход\n";
     std::cout << "  Ваш выбор: ";
 
-    int choice = 0;
+    std::string choice = "";
     std::cin >> choice;
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
-    if (choice == 1) return AppMode::ENCRYPT;
-    if (choice == 2) return AppMode::DECRYPT;
-    if (choice == 0) return AppMode::EXIT;
+    if (choice == "1") return AppMode::ENCRYPT;
+    if (choice == "2") return AppMode::DECRYPT;
+    if (choice == "0") return AppMode::EXIT;
     return AppMode::UNKNOWN;
 }
 
