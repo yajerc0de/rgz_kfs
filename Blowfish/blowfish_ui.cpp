@@ -11,7 +11,6 @@ using namespace std;
 //  blowfish_ui.cpp — консольный интерфейс модуля Blowfish
 // =============================================================================
 
-// Имена файлов для хранения ключа и IV (рядом с исполняемым файлом)
 static const string KEY_FILE = "blowfish_key.bin";
 static const string IV_FILE  = "blowfish_iv.bin";
 
@@ -38,7 +37,6 @@ static void modeText(Blowfish& bf) {
         string text;
         getline(cin, text);
 
-        // Генерируем IV и сохраняем в файл
         vector<uint8_t> iv = generateAndSave(IV_FILE, Blowfish::BLOCK_BYTES, "IV");
         if (iv.empty()) return;
 
@@ -50,7 +48,7 @@ static void modeText(Blowfish& bf) {
             cout << "\n";
             printSep();
             cout << "  Шифротекст (HEX): " << bytesToHex(cipher) << "\n";
-            cout << "  IV сохранён в   : " << IV_FILE << "\n";
+            cout << "  IV сохранён в   : " << IV_FILE  << "\n";
             cout << "  Ключ сохранён в : " << KEY_FILE << "\n";
             printSep();
         } catch (const exception& e) {
@@ -63,7 +61,6 @@ static void modeText(Blowfish& bf) {
         cin >> hexCipher;
         cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
-        // Загружаем IV из файла
         vector<uint8_t> iv = loadFromFile(IV_FILE, "IV");
         if (iv.empty() || iv.size() != Blowfish::BLOCK_BYTES) {
             cout << "\n  [!] Неверный IV в файле " << IV_FILE << "\n";
@@ -106,18 +103,17 @@ static void modeFile(Blowfish& bf) {
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
     if (choice == 1) {
+        // ── Шифрование ────────────────────────────────────────────────────────
         cout << "\n  Путь к исходному файлу: ";
         string inPath;
         getline(cin, inPath);
 
-        cout << "  Путь для сохранения зашифрованного файла: ";
-        string outPath;
-        getline(cin, outPath);
-
         vector<uint8_t> plain;
         if (!readFile(inPath, plain)) return;
 
-        // Генерируем IV и сохраняем в файл
+        // Автоматически строим путь: Encryptfiles/encrypted_<имя файла>
+        string outPath = buildEncryptPath(inPath);
+
         vector<uint8_t> iv = generateAndSave(IV_FILE, Blowfish::BLOCK_BYTES, "IV");
         if (iv.empty()) return;
 
@@ -125,7 +121,6 @@ static void modeFile(Blowfish& bf) {
             vector<uint8_t> cipher = bf.encryptCBC(plain, iv);
 
             // Формат файла: [8 байт IV][шифротекст]
-            // IV дублируется в файл для удобства — основной хранится в blowfish_iv.bin
             vector<uint8_t> output;
             output.insert(output.end(), iv.begin(),     iv.end());
             output.insert(output.end(), cipher.begin(), cipher.end());
@@ -134,24 +129,22 @@ static void modeFile(Blowfish& bf) {
 
             cout << "\n";
             printSep();
-            cout << "  Файл зашифрован : " << outPath       << "\n";
-            cout << "  Исходный размер : " << plain.size()  << " байт\n";
-            cout << "  Итоговый размер : " << output.size() << " байт\n";
-            cout << "  IV сохранён в   : " << IV_FILE       << "\n";
-            cout << "  Ключ сохранён в : " << KEY_FILE      << "\n";
+            cout << "  Исходный файл   : " << inPath        << "\n";
+            cout << "  Зашифрован в    : " << outPath        << "\n";
+            cout << "  Исходный размер : " << plain.size()   << " байт\n";
+            cout << "  Итоговый размер : " << output.size()  << " байт\n";
+            cout << "  Ключ сохранён в : " << KEY_FILE       << "\n";
+            cout << "  IV сохранён в   : " << IV_FILE        << "\n";
             printSep();
         } catch (const exception& e) {
             cout << "\n  [!] Ошибка: " << e.what() << "\n";
         }
 
     } else if (choice == 2) {
+        // ── Дешифрование ──────────────────────────────────────────────────────
         cout << "\n  Путь к зашифрованному файлу: ";
         string inPath;
         getline(cin, inPath);
-
-        cout << "  Путь для сохранения расшифрованного файла: ";
-        string outPath;
-        getline(cin, outPath);
 
         vector<uint8_t> raw;
         if (!readFile(inPath, raw)) return;
@@ -161,7 +154,10 @@ static void modeFile(Blowfish& bf) {
             return;
         }
 
-        // IV берём из первых 8 байт зашифрованного файла
+        // Автоматически строим путь: Decryptfiles/decrypted_<имя файла>
+        string outPath = buildDecryptPath(inPath);
+
+        // IV извлекаем из первых 8 байт файла
         vector<uint8_t> iv(raw.begin(), raw.begin() + Blowfish::BLOCK_BYTES);
         vector<uint8_t> cipher(raw.begin() + Blowfish::BLOCK_BYTES, raw.end());
 
@@ -174,8 +170,9 @@ static void modeFile(Blowfish& bf) {
 
             cout << "\n";
             printSep();
-            cout << "  Файл расшифрован: " << outPath      << "\n";
-            cout << "  Размер данных   : " << plain.size() << " байт\n";
+            cout << "  Зашифрованный файл: " << inPath       << "\n";
+            cout << "  Расшифрован в     : " << outPath       << "\n";
+            cout << "  Размер данных     : " << plain.size()  << " байт\n";
             printSep();
         } catch (const exception& e) {
             cout << "\n  [!] Ошибка: " << e.what()
@@ -255,7 +252,7 @@ void runBlowfish() {
             continue;
         }
 
-        // Для режимов 1 и 2 — загружаем ключ из файла
+        // Загружаем ключ из файла
         vector<uint8_t> keyBytes = loadFromFile(KEY_FILE, "КЛЮЧ");
         if (keyBytes.empty()) {
             cout << "\n  [!] Файл ключа не найден: " << KEY_FILE << "\n";

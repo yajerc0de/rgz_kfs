@@ -7,6 +7,15 @@
 #include <random>
 #include <algorithm>
 
+// Платформозависимое создание папки
+#ifdef _WIN32
+    #include <windows.h>
+    #include <direct.h>
+#else
+    #include <sys/stat.h>
+    #include <sys/types.h>
+#endif
+
 using namespace std;
 
 // =============================================================================
@@ -70,6 +79,70 @@ bool writeFile(const string& path, const vector<uint8_t>& data) {
     }
     f.write(reinterpret_cast<const char*>(data.data()), data.size());
     return true;
+}
+
+bool ensureDir(const string& dirPath) {
+    // Проверяем существование через ifstream-трюк — без filesystem
+#ifdef _WIN32
+    DWORD attr = GetFileAttributesA(dirPath.c_str());
+    if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY))
+        return true; // папка уже есть
+    if (_mkdir(dirPath.c_str()) == 0) {
+        cout << "  [*] Создана папка: " << dirPath << "\n";
+        return true;
+    }
+#else
+    struct stat st;
+    if (stat(dirPath.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
+        return true; // папка уже есть
+    if (mkdir(dirPath.c_str(), 0755) == 0) {
+        cout << "  [*] Создана папка: " << dirPath << "\n";
+        return true;
+    }
+#endif
+    cout << "\n  [!] Не удалось создать папку: " << dirPath << "\n";
+    return false;
+}
+
+// =============================================================================
+//  Работа с путями и именами файлов — без <filesystem>
+// =============================================================================
+
+string extractFilename(const string& path) {
+    // Ищем последний '/' или '\' и берём всё после него
+    size_t pos = path.find_last_of("/\\");
+    if (pos == string::npos) return path;
+    return path.substr(pos + 1);
+}
+
+string extractExtension(const string& path) {
+    string filename = extractFilename(path);
+    size_t dot = filename.find_last_of('.');
+    if (dot == string::npos) return "";
+    return filename.substr(dot); // включая точку, например ".jpg"
+}
+
+string buildEncryptPath(const string& sourcePath) {
+    const string dir = "Encryptfiles";
+    ensureDir(dir);
+    string filename = extractFilename(sourcePath);
+    return dir + "/" + "encrypted_" + filename;
+}
+
+string buildDecryptPath(const string& sourcePath) {
+    const string dir = "Decryptfiles";
+    ensureDir(dir);
+    string filename = extractFilename(sourcePath);
+
+    // Убираем префикс "encrypted_" чтобы восстановить оригинальное имя
+    const string prefix = "encrypted_";
+    if (filename.size() > prefix.size() &&
+        filename.substr(0, prefix.size()) == prefix)
+    {
+        filename = filename.substr(prefix.size());
+    }
+
+    return dir + "/" + "decrypted_" + filename;
 }
 
 // =============================================================================
