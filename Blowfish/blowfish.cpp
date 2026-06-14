@@ -294,7 +294,6 @@ const uint32_t Blowfish::INIT_S[Blowfish::S_BOX_COUNT][Blowfish::S_BOX_SIZE] = {
 // =============================================================================
 
 Blowfish::Blowfish() {
-    // Копируем константы π в рабочие P и S
     memcpy(P, INIT_P, sizeof(P));
     memcpy(S, INIT_S, sizeof(S));
 }
@@ -304,19 +303,15 @@ Blowfish::Blowfish() {
 // =============================================================================
 
 bool Blowfish::setKey(const vector<uint8_t>& key) {
-    // Проверка длины ключа
-    if (key.size() < KEY_MIN || key.size() > KEY_MAX) {
+    if (key.size() < KEY_MIN || key.size() > KEY_MAX)
         return false;
-    }
 
-    // ── Шаг 1: сбросить P и S к константам π ─────────────────────────────────
     memcpy(P, INIT_P, sizeof(P));
     memcpy(S, INIT_S, sizeof(S));
 
-    // ── Шаг 2: XOR P-массива с ключом (циклически) ───────────────────────────
+    // XOR P-массива с ключом (циклически)
     int keyLen = static_cast<int>(key.size());
     int keyPos = 0;
-
     for (int i = 0; i < P_ARRAY_SIZE; i++) {
         uint32_t word = 0;
         for (int b = 0; b < 4; b++) {
@@ -326,17 +321,14 @@ bool Blowfish::setKey(const vector<uint8_t>& key) {
         P[i] ^= word;
     }
 
-    // ── Шаг 3: шифруем нулевой блок и переписываем P и S ─────────────────────
+    // Шифруем нулевой блок и переписываем P и S
     uint32_t L = 0, R = 0;
 
-    // Обновляем P[0..17]
     for (int i = 0; i < P_ARRAY_SIZE; i += 2) {
         encryptBlock(L, R);
         P[i]     = L;
         P[i + 1] = R;
     }
-
-    // Обновляем S[0..3][0..255]
     for (int box = 0; box < S_BOX_COUNT; box++) {
         for (int j = 0; j < S_BOX_SIZE; j += 2) {
             encryptBlock(L, R);
@@ -350,39 +342,25 @@ bool Blowfish::setKey(const vector<uint8_t>& key) {
 }
 
 // =============================================================================
-//  Вспомогательные функции
+//  Вспомогательные функции — упаковка/распаковка блока
 // =============================================================================
 
-// Упаковать два uint32_t в 8 байт (big-endian)
 void Blowfish::packBlock(uint32_t L, uint32_t R, uint8_t* out) {
-    out[0] = (L >> 24) & 0xFF;
-    out[1] = (L >> 16) & 0xFF;
-    out[2] = (L >>  8) & 0xFF;
-    out[3] = (L      ) & 0xFF;
-    out[4] = (R >> 24) & 0xFF;
-    out[5] = (R >> 16) & 0xFF;
-    out[6] = (R >>  8) & 0xFF;
-    out[7] = (R      ) & 0xFF;
+    out[0] = (L >> 24) & 0xFF; out[1] = (L >> 16) & 0xFF;
+    out[2] = (L >>  8) & 0xFF; out[3] = (L      ) & 0xFF;
+    out[4] = (R >> 24) & 0xFF; out[5] = (R >> 16) & 0xFF;
+    out[6] = (R >>  8) & 0xFF; out[7] = (R      ) & 0xFF;
 }
 
-// Распаковать 8 байт в два uint32_t (big-endian)
 void Blowfish::unpackBlock(const uint8_t* in, uint32_t& L, uint32_t& R) {
-    L = (static_cast<uint32_t>(in[0]) << 24)
-      | (static_cast<uint32_t>(in[1]) << 16)
-      | (static_cast<uint32_t>(in[2]) <<  8)
-      |  static_cast<uint32_t>(in[3]);
-
-    R = (static_cast<uint32_t>(in[4]) << 24)
-      | (static_cast<uint32_t>(in[5]) << 16)
-      | (static_cast<uint32_t>(in[6]) <<  8)
-      |  static_cast<uint32_t>(in[7]);
+    L = (uint32_t(in[0]) << 24) | (uint32_t(in[1]) << 16)
+      | (uint32_t(in[2]) <<  8) |  uint32_t(in[3]);
+    R = (uint32_t(in[4]) << 24) | (uint32_t(in[5]) << 16)
+      | (uint32_t(in[6]) <<  8) |  uint32_t(in[7]);
 }
 
 // =============================================================================
-//  Функция F — нелинейное преобразование через S-блоки
-//
-//  Разбиваем x на 4 байта: a b c d
-//  F(x) = ((S[0][a] + S[1][b]) XOR S[2][c]) + S[3][d]
+//  Функция F
 // =============================================================================
 
 uint32_t Blowfish::F(uint32_t x) const {
@@ -390,20 +368,11 @@ uint32_t Blowfish::F(uint32_t x) const {
     const uint8_t b = (x >> 16) & 0xFF;
     const uint8_t c = (x >>  8) & 0xFF;
     const uint8_t d = (x      ) & 0xFF;
-
     return ((S[0][a] + S[1][b]) ^ S[2][c]) + S[3][d];
 }
 
 // =============================================================================
-//  encryptBlock — шифрование одного 64-битного блока
-//
-//  Сеть Фейстеля, 16 раундов:
-//    L = L XOR P[i]
-//    R = F(L) XOR R
-//    swap(L, R)
-//  Финальная перестановка (отменяет лишний swap):
-//    R = R XOR P[16]
-//    L = L XOR P[17]
+//  encryptBlock / decryptBlock
 // =============================================================================
 
 void Blowfish::encryptBlock(uint32_t& L, uint32_t& R) const {
@@ -412,18 +381,10 @@ void Blowfish::encryptBlock(uint32_t& L, uint32_t& R) const {
         R ^= F(L);
         swap(L, R);
     }
-
-    // Финальная перестановка
     swap(L, R);
-    R ^= P[ROUNDS];        // P[16]
-    L ^= P[ROUNDS + 1];    // P[17]
+    R ^= P[ROUNDS];
+    L ^= P[ROUNDS + 1];
 }
-
-// =============================================================================
-//  decryptBlock — дешифрование одного 64-битного блока
-//
-//  Та же сеть Фейстеля, но P-массив применяется в обратном порядке
-// =============================================================================
 
 void Blowfish::decryptBlock(uint32_t& L, uint32_t& R) const {
     for (int i = ROUNDS + 1; i > 1; i--) {
@@ -431,8 +392,6 @@ void Blowfish::decryptBlock(uint32_t& L, uint32_t& R) const {
         R ^= F(L);
         swap(L, R);
     }
-
-    // Финальная перестановка
     swap(L, R);
     R ^= P[1];
     L ^= P[0];
@@ -440,12 +399,6 @@ void Blowfish::decryptBlock(uint32_t& L, uint32_t& R) const {
 
 // =============================================================================
 //  PKCS#7 паддинг
-//
-//  Дополняет данные до кратности BLOCK_BYTES (8 байт).
-//  Значение каждого добавленного байта = количество добавленных байт.
-//
-//  Пример: данные 5 байт → добавляем 3 байта со значением 0x03
-//  Если данные уже кратны 8 → добавляем целый блок из восьми байт 0x08
 // =============================================================================
 
 vector<uint8_t> Blowfish::pkcs7Pad(const vector<uint8_t>& data) {
@@ -455,473 +408,77 @@ vector<uint8_t> Blowfish::pkcs7Pad(const vector<uint8_t>& data) {
     return padded;
 }
 
-// Снимает PKCS#7 паддинг.
-// Бросает runtime_error если паддинг нарушен (неверный ключ или повреждённые данные).
-
 vector<uint8_t> Blowfish::pkcs7Unpad(const vector<uint8_t>& data) {
-    if (data.empty() || data.size() % BLOCK_BYTES != 0) {
+    if (data.empty() || data.size() % BLOCK_BYTES != 0)
         throw runtime_error("Blowfish: неверный размер данных при снятии паддинга");
-    }
 
     uint8_t padLen = data.back();
-
-    if (padLen == 0 || padLen > BLOCK_BYTES) {
+    if (padLen == 0 || padLen > BLOCK_BYTES)
         throw runtime_error("Blowfish: повреждён PKCS#7 паддинг");
-    }
 
-    // Проверяем что все байты паддинга одинаковы
     for (size_t i = data.size() - padLen; i < data.size(); i++) {
-        if (data[i] != padLen) {
+        if (data[i] != padLen)
             throw runtime_error("Blowfish: неверный PKCS#7 паддинг (возможно, неверный ключ)");
-        }
     }
-
     return vector<uint8_t>(data.begin(), data.end() - padLen);
 }
 
 // =============================================================================
-//  encryptCBC — шифрование произвольных данных в режиме CBC
-//
-//  Алгоритм:
-//    1. Применяем PKCS#7 паддинг
-//    2. Первый блок XOR-ится с IV
-//    3. Каждый следующий блок XOR-ится с предыдущим шифроблоком
-//    4. Каждый блок шифруется через encryptBlock
-//
-//  C[0] = Encrypt(P[0] XOR IV)
-//  C[i] = Encrypt(P[i] XOR C[i-1])
+//  CBC-режим
 // =============================================================================
 
 vector<uint8_t> Blowfish::encryptCBC(const vector<uint8_t>& plaintext,
                                       const vector<uint8_t>& iv) const {
-    if (!m_keyIsSet) {
-        throw runtime_error("Blowfish: ключ не установлен, вызовите setKey()");
-    }
-    if (iv.size() != BLOCK_BYTES) {
+    if (!m_keyIsSet)
+        throw runtime_error("Blowfish: ключ не установлен");
+    if (iv.size() != BLOCK_BYTES)
         throw runtime_error("Blowfish: IV должен быть ровно 8 байт");
-    }
 
-    vector<uint8_t> padded   = pkcs7Pad(plaintext);
+    vector<uint8_t> padded = pkcs7Pad(plaintext);
     vector<uint8_t> cipher(padded.size());
 
-    // prev — предыдущий шифроблок (первый раз = IV)
     uint8_t prev[BLOCK_BYTES];
     memcpy(prev, iv.data(), BLOCK_BYTES);
 
     for (size_t offset = 0; offset < padded.size(); offset += BLOCK_BYTES) {
-        // XOR открытого блока с предыдущим шифроблоком (или IV)
         uint8_t block[BLOCK_BYTES];
-        for (int b = 0; b < BLOCK_BYTES; b++) {
+        for (int b = 0; b < BLOCK_BYTES; b++)
             block[b] = padded[offset + b] ^ prev[b];
-        }
 
-        // Шифруем блок
         uint32_t L, R;
         unpackBlock(block, L, R);
         encryptBlock(L, R);
         packBlock(L, R, &cipher[offset]);
-
-        // Сохраняем шифроблок как prev для следующей итерации
         memcpy(prev, &cipher[offset], BLOCK_BYTES);
     }
-
     return cipher;
 }
 
-// =============================================================================
-//  decryptCBC — дешифрование в режиме CBC
-//
-//  C[i] = Encrypt(P[i] XOR C[i-1])  →  P[i] = Decrypt(C[i]) XOR C[i-1]
-//
-//  Важно: блоки дешифруются по одному слева направо,
-//  но XOR применяется с предыдущим ШИФРОБЛОКОМ (не открытым текстом).
-// =============================================================================
-
 vector<uint8_t> Blowfish::decryptCBC(const vector<uint8_t>& ciphertext,
                                       const vector<uint8_t>& iv) const {
-    if (!m_keyIsSet) {
-        throw runtime_error("Blowfish: ключ не установлен, вызовите setKey()");
-    }
-    if (iv.size() != BLOCK_BYTES) {
+    if (!m_keyIsSet)
+        throw runtime_error("Blowfish: ключ не установлен");
+    if (iv.size() != BLOCK_BYTES)
         throw runtime_error("Blowfish: IV должен быть ровно 8 байт");
-    }
-    if (ciphertext.empty() || ciphertext.size() % BLOCK_BYTES != 0) {
+    if (ciphertext.empty() || ciphertext.size() % BLOCK_BYTES != 0)
         throw runtime_error("Blowfish: размер шифротекста не кратен 8 байтам");
-    }
 
     vector<uint8_t> padded(ciphertext.size());
 
-    // prev — предыдущий шифроблок (первый раз = IV)
     uint8_t prev[BLOCK_BYTES];
     memcpy(prev, iv.data(), BLOCK_BYTES);
 
     for (size_t offset = 0; offset < ciphertext.size(); offset += BLOCK_BYTES) {
-        // Дешифруем блок
         uint32_t L, R;
         unpackBlock(&ciphertext[offset], L, R);
         decryptBlock(L, R);
 
         uint8_t block[BLOCK_BYTES];
         packBlock(L, R, block);
-
-        // XOR с предыдущим шифроблоком (или IV)
-        for (int b = 0; b < BLOCK_BYTES; b++) {
+        for (int b = 0; b < BLOCK_BYTES; b++)
             padded[offset + b] = block[b] ^ prev[b];
-        }
 
-        // Сохраняем текущий шифроблок как prev
         memcpy(prev, &ciphertext[offset], BLOCK_BYTES);
     }
-
-    // Снимаем паддинг — бросит исключение при неверном ключе
     return pkcs7Unpad(padded);
-}
-
-// =============================================================================
-//  runBlowfish() — точка входа из main.cpp
-//  Меню: шифрование/дешифрование текста, файлов, генератор ключей
-// =============================================================================
-
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <iomanip>
-#include <random>
-#include <algorithm>
-
-using namespace std;
-
-// ─── Вспомогательные функции UI ──────────────────────────────────────────────
-
-// Конвертировать hex-строку вида "a1b2c3..." в вектор байт
-static bool hexToBytes(const string& hex, vector<uint8_t>& out) {
-    if (hex.size() % 2 != 0) return false;
-    out.clear();
-    for (size_t i = 0; i < hex.size(); i += 2) {
-        try {
-            out.push_back(static_cast<uint8_t>(stoul(hex.substr(i, 2), nullptr, 16)));
-        } catch (...) {
-            return false;
-        }
-    }
-    return true;
-}
-
-// Конвертировать вектор байт в hex-строку
-static string bytesToHex(const vector<uint8_t>& data) {
-    ostringstream oss;
-    for (uint8_t b : data) {
-        oss << hex << setw(2) << setfill('0') << static_cast<int>(b);
-    }
-    return oss.str();
-}
-
-// Сгенерировать случайные байты через mt19937
-static vector<uint8_t> randomBytes(size_t count) {
-    random_device rd;
-    mt19937 rng(rd());
-    uniform_int_distribution<int> dist(0, 255);
-
-    vector<uint8_t> result(count);
-    for (auto& b : result) b = static_cast<uint8_t>(dist(rng));
-    return result;
-}
-
-// Считать ключ от пользователя (hex-строка), вернуть байты
-// Возвращает false если ввод некорректен
-static bool inputKey(vector<uint8_t>& keyBytes) {
-    cout << "\n  Введите ключ в HEX-формате\n";
-    cout << "  (от 8 до 112 символов, т.е. 4–56 байт)\n";
-    cout << "  Ключ: ";
-
-    string hexKey;
-    cin >> hexKey;
-    cin.ignore(numeric_limits<streamsize>::max(), '\n');
-
-    // Приводим к нижнему регистру
-    transform(hexKey.begin(), hexKey.end(), hexKey.begin(), ::tolower);
-
-    if (!hexToBytes(hexKey, keyBytes)) {
-        cout << "\n  [!] Неверный HEX-формат ключа.\n";
-        return false;
-    }
-    if (keyBytes.size() < Blowfish::KEY_MIN || keyBytes.size() > Blowfish::KEY_MAX) {
-        cout << "\n  [!] Длина ключа " << keyBytes.size()
-             << " байт. Допустимо: 4–56 байт.\n";
-        return false;
-    }
-    return true;
-}
-
-// Считать содержимое бинарного файла
-static bool readFile(const string& path, vector<uint8_t>& data) {
-    ifstream f(path, ios::binary);
-    if (!f) {
-        cout << "\n  [!] Не удалось открыть файл: " << path << "\n";
-        return false;
-    }
-    data.assign(istreambuf_iterator<char>(f), istreambuf_iterator<char>());
-    return true;
-}
-
-// Записать байты в файл
-static bool writeFile(const string& path, const vector<uint8_t>& data) {
-    ofstream f(path, ios::binary);
-    if (!f) {
-        cout << "\n  [!] Не удалось создать файл: " << path << "\n";
-        return false;
-    }
-    f.write(reinterpret_cast<const char*>(data.data()), data.size());
-    return true;
-}
-
-static void printSep(char ch = '-', int w = 50) {
-    cout << string(w, ch) << "\n";
-}
-
-// ─── Режим 1: шифрование/дешифрование текста ─────────────────────────────────
-
-static void modeText(Blowfish& bf, const vector<uint8_t>& key) {
-    cout << "\n  Текстовый режим:\n";
-    cout << "    1. Зашифровать текст\n";
-    cout << "    2. Расшифровать текст\n";
-    cout << "  Выбор: ";
-
-    int choice = 0;
-    cin >> choice;
-    cin.ignore(numeric_limits<streamsize>::max(), '\n');
-
-    if (choice == 1) {
-        // ── Шифрование ────────────────────────────────────────────────────────
-        cout << "\n  Введите текст для шифрования:\n  > ";
-        string text;
-        getline(cin, text);
-
-        vector<uint8_t> iv = randomBytes(Blowfish::BLOCK_BYTES);
-        vector<uint8_t> plain(text.begin(), text.end());
-
-        try {
-            vector<uint8_t> cipher = bf.encryptCBC(plain, iv);
-
-            cout << "\n";
-            printSep();
-            cout << "  IV        : " << bytesToHex(iv)     << "\n";
-            cout << "  Шифротекст: " << bytesToHex(cipher) << "\n";
-            cout << "\n  Сохраните IV — он нужен для расшифровки!\n";
-            printSep();
-        } catch (const exception& e) {
-            cout << "\n  [!] Ошибка шифрования: " << e.what() << "\n";
-        }
-
-    } else if (choice == 2) {
-        // ── Дешифрование ──────────────────────────────────────────────────────
-        cout << "\n  Введите IV (HEX, 16 символов): ";
-        string hexIV;
-        cin >> hexIV;
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-
-        cout << "  Введите шифротекст (HEX): ";
-        string hexCipher;
-        cin >> hexCipher;
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-
-        vector<uint8_t> iv, cipher;
-        if (!hexToBytes(hexIV, iv) || iv.size() != Blowfish::BLOCK_BYTES) {
-            cout << "\n  [!] Неверный IV.\n";
-            return;
-        }
-        if (!hexToBytes(hexCipher, cipher)) {
-            cout << "\n  [!] Неверный шифротекст.\n";
-            return;
-        }
-
-        try {
-            vector<uint8_t> plain = bf.decryptCBC(cipher, iv);
-            string result(plain.begin(), plain.end());
-
-            cout << "\n";
-            printSep();
-            cout << "  Результат: " << result << "\n";
-            printSep();
-        } catch (const exception& e) {
-            cout << "\n  [!] Ошибка расшифровки: " << e.what() << "\n";
-        }
-
-    } else {
-        cout << "\n  [!] Неверный выбор.\n";
-    }
-}
-
-// ─── Режим 2: шифрование/дешифрование файла ──────────────────────────────────
-
-static void modeFile(Blowfish& bf, const vector<uint8_t>& key) {
-    cout << "\n  Файловый режим:\n";
-    cout << "    1. Зашифровать файл\n";
-    cout << "    2. Расшифровать файл\n";
-    cout << "  Выбор: ";
-
-    int choice = 0;
-    cin >> choice;
-    cin.ignore(numeric_limits<streamsize>::max(), '\n');
-
-    if (choice == 1) {
-        // ── Шифрование файла ──────────────────────────────────────────────────
-        cout << "\n  Путь к исходному файлу: ";
-        string inPath;
-        getline(cin, inPath);
-
-        cout << "  Путь для сохранения зашифрованного файла: ";
-        string outPath;
-        getline(cin, outPath);
-
-        vector<uint8_t> plain;
-        if (!readFile(inPath, plain)) return;
-
-        vector<uint8_t> iv = randomBytes(Blowfish::BLOCK_BYTES);
-
-        try {
-            vector<uint8_t> cipher = bf.encryptCBC(plain, iv);
-
-            // Формат файла: [8 байт IV][шифротекст]
-            vector<uint8_t> output;
-            output.insert(output.end(), iv.begin(), iv.end());
-            output.insert(output.end(), cipher.begin(), cipher.end());
-
-            if (!writeFile(outPath, output)) return;
-
-            cout << "\n";
-            printSep();
-            cout << "  Файл зашифрован: " << outPath << "\n";
-            cout << "  Исходный размер : " << plain.size()  << " байт\n";
-            cout << "  Итоговый размер : " << output.size() << " байт\n";
-            cout << "  IV встроен в файл (первые 8 байт)\n";
-            printSep();
-        } catch (const exception& e) {
-            cout << "\n  [!] Ошибка: " << e.what() << "\n";
-        }
-
-    } else if (choice == 2) {
-        // ── Дешифрование файла ────────────────────────────────────────────────
-        cout << "\n  Путь к зашифрованному файлу: ";
-        string inPath;
-        getline(cin, inPath);
-
-        cout << "  Путь для сохранения расшифрованного файла: ";
-        string outPath;
-        getline(cin, outPath);
-
-        vector<uint8_t> raw;
-        if (!readFile(inPath, raw)) return;
-
-        if (raw.size() < static_cast<size_t>(Blowfish::BLOCK_BYTES) + Blowfish::BLOCK_BYTES) {
-            cout << "\n  [!] Файл слишком мал или повреждён.\n";
-            return;
-        }
-
-        // Извлекаем IV из первых 8 байт
-        vector<uint8_t> iv(raw.begin(), raw.begin() + Blowfish::BLOCK_BYTES);
-        vector<uint8_t> cipher(raw.begin() + Blowfish::BLOCK_BYTES, raw.end());
-
-        try {
-            vector<uint8_t> plain = bf.decryptCBC(cipher, iv);
-
-            if (!writeFile(outPath, plain)) return;
-
-            cout << "\n";
-            printSep();
-            cout << "  Файл расшифрован: " << outPath << "\n";
-            cout << "  Размер данных   : " << plain.size() << " байт\n";
-            printSep();
-        } catch (const exception& e) {
-            cout << "\n  [!] Ошибка: " << e.what()
-                 << "\n  (Возможно, неверный ключ или повреждённый файл)\n";
-        }
-
-    } else {
-        cout << "\n  [!] Неверный выбор.\n";
-    }
-}
-
-// ─── Режим 3: генератор ключей ────────────────────────────────────────────────
-
-static void modeKeyGen() {
-    cout << "\n  Генератор ключей Blowfish\n";
-    cout << "  Введите желаемую длину ключа в байтах (" 
-         << Blowfish::KEY_MIN << "–" << Blowfish::KEY_MAX << "): ";
-
-    int len = 0;
-    cin >> len;
-    cin.ignore(numeric_limits<streamsize>::max(), '\n');
-
-    if (len < Blowfish::KEY_MIN || len > Blowfish::KEY_MAX) {
-        cout << "\n  [!] Недопустимая длина. Используем 32 байта.\n";
-        len = 32;
-    }
-
-    vector<uint8_t> key = randomBytes(static_cast<size_t>(len));
-
-    cout << "\n";
-    printSep();
-    cout << "  Длина ключа : " << len << " байт (" << len * 8 << " бит)\n";
-    cout << "  Ключ (HEX)  : " << bytesToHex(key) << "\n";
-    cout << "\n  Сохраните ключ в надёжном месте!\n";
-    printSep();
-}
-
-// ─── Главное меню Blowfish ────────────────────────────────────────────────────
-
-void runBlowfish() {
-    cout << "\n";
-    printSep('=');
-    cout << "  Blowfish — симметричный блочный шифр\n";
-    cout << "  Блок: 64 бит | Ключ: 32–448 бит | Раундов: 16 | Режим: CBC\n";
-    printSep('=');
-
-    // Сначала предлагаем меню без ключа
-    bool running = true;
-    while (running) {
-        cout << "\n  Что вы хотите сделать?\n\n";
-        cout << "    1. Зашифровать / расшифровать текст\n";
-        cout << "    2. Зашифровать / расшифровать файл\n";
-        cout << "    3. Сгенерировать ключ\n";
-        cout << "    0. Вернуться в главное меню\n\n";
-        printSep();
-        cout << "  Выбор: ";
-
-        int choice = 0;
-        cin >> choice;
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-
-        if (choice == 0) {
-            running = false;
-            continue;
-        }
-
-        if (choice == 3) {
-            modeKeyGen();
-            continue;
-        }
-
-        if (choice != 1 && choice != 2) {
-            cout << "\n  [!] Неверный выбор.\n";
-            continue;
-        }
-
-        // Для режимов 1 и 2 нужен ключ
-        vector<uint8_t> keyBytes;
-        if (!inputKey(keyBytes)) continue;
-
-        Blowfish bf;
-        if (!bf.setKey(keyBytes)) {
-            cout << "\n  [!] Не удалось установить ключ.\n";
-            continue;
-        }
-        cout << "\n  [OK] Ключ принят. Key Schedule выполнен.\n";
-
-        if (choice == 1) {
-            modeText(bf, keyBytes);
-        } else {
-            modeFile(bf, keyBytes);
-        }
-    }
 }
