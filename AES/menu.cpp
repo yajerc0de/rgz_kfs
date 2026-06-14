@@ -16,7 +16,6 @@ static std::string get_output_dir() {
 
 // Убирает расширение из имени файла
 static std::string strip_extension(const std::string& filename) {
-    // Ищем последний слэш, чтобы взять только имя файла
     int slash_pos = -1;
     for (int i = (int)filename.size() - 1; i >= 0; --i) {
         if (filename[i] == '/' || filename[i] == '\\') {
@@ -26,7 +25,6 @@ static std::string strip_extension(const std::string& filename) {
     }
     std::string name = filename.substr(slash_pos + 1);
 
-    // Ищем точку расширения
     int dot_pos = -1;
     for (int i = (int)name.size() - 1; i >= 0; --i) {
         if (name[i] == '.') {
@@ -39,6 +37,7 @@ static std::string strip_extension(const std::string& filename) {
     return name;
 }
 
+// Получает расширение файла
 static std::string get_extension(const std::string& filename) {
     int slash_pos = -1;
     for (int i = (int)filename.size() - 1; i >= 0; --i) {
@@ -132,30 +131,24 @@ void run_encrypt_mode() {
 
         if (!read_binary_file(filepath, plaintext)) return;
 
-        // Имя выходного файла: имя_исходного_encrypted.bin
         extension = get_extension(filepath);
         out_filename = strip_extension(filepath) + "_encrypted.bin";
     }
 
-    // Генерируем ключ и сохраняем в key.bin рядом с программой
     unsigned char cipher_key[BLOCK_SIZE];
     std::string key_path = get_output_dir() + "key.bin";
     if (!generate_and_save_key(key_path, cipher_key)) return;
 
-    // Разворачиваем раундовые ключи
     unsigned char round_keys[ROUND_KEYS_SIZE];
     expand_key(cipher_key, round_keys);
 
-    // Генерируем IV
     unsigned char iv[BLOCK_SIZE];
     generate_iv(iv);
     print_hex("Вектор инициализации IV (HEX)", iv, BLOCK_SIZE);
 
-    // Шифруем
     std::cout << "\nШифрование...\n";
     std::vector<unsigned char> ciphertext = cbc_encrypt(plaintext, iv, round_keys);
 
-    // Сохраняем: IV + зашифрованные данные в один файл
     std::string out_path = get_output_dir() + out_filename;
     if (!save_encrypted_file(out_path, iv, extension, ciphertext)) return;
 
@@ -170,27 +163,22 @@ void run_encrypt_mode() {
 void run_decrypt_mode() {
     std::cout << "\n--- РЕЖИМ ДЕШИФРОВАНИЯ ---\n";
 
-    // Запрашиваем файл для расшифровки
     std::cout << "Введите путь к зашифрованному файлу (.bin): ";
     std::string enc_path;
     std::getline(std::cin, enc_path);
 
-    // Запрашиваем файл ключа
     std::cout << "Введите путь к файлу ключа (key.bin): ";
     std::string key_path;
     std::getline(std::cin, key_path);
 
-    // Загружаем ключ
     unsigned char cipher_key[BLOCK_SIZE];
     if (!load_key(key_path, cipher_key)) return;
 
     print_hex("Загружен ключ (HEX)", cipher_key, BLOCK_SIZE);
 
-    // Разворачиваем раундовые ключи
     unsigned char round_keys[ROUND_KEYS_SIZE];
     expand_key(cipher_key, round_keys);
 
-    // Загружаем IV и зашифрованные данные
     unsigned char iv[BLOCK_SIZE];
     std::vector<unsigned char> ciphertext;
     std::string extension;
@@ -199,7 +187,6 @@ void run_decrypt_mode() {
     print_hex("IV из файла (HEX)", iv, BLOCK_SIZE);
     std::cout << "Размер зашифрованных данных: " << ciphertext.size() << " байт\n";
 
-    // Расшифровываем
     std::cout << "\nРасшифровка...\n";
     std::vector<unsigned char> plaintext = cbc_decrypt(ciphertext, iv, round_keys);
 
@@ -208,7 +195,6 @@ void run_decrypt_mode() {
         return;
     }
 
-    // Имя выходного файла
     std::string out_filename =
     strip_extension(enc_path) + "_decrypted";
     if (!extension.empty()) out_filename += "." + extension;
@@ -219,7 +205,6 @@ void run_decrypt_mode() {
     std::cout << "\n[OK] Расшифрованный файл сохранён: " << out_path << "\n";
     std::cout << "     Размер расшифрованных данных: " << plaintext.size() << " байт\n";
 
-    // Если данные похожи на текст — показываем превью
     bool looks_like_text = true;
     int preview_len = (int)plaintext.size();
     if (preview_len > 200) preview_len = 200;

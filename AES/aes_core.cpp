@@ -124,7 +124,6 @@ void encrypt_block(const unsigned char* input, unsigned char* output, const unsi
         add_round_key(state, round_keys, round);
     }
 
-    // Последний раунд — без MixColumns
     sub_bytes(state);
     shift_rows(state);
     add_round_key(state, round_keys, Nr);

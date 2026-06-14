@@ -60,18 +60,14 @@ bool save_encrypted_file(
         return false;
     }
 
-    // IV
     f.write(reinterpret_cast<const char*>(iv), BLOCK_SIZE);
 
-    // Длина расширения
     unsigned char ext_len = (unsigned char)extension.size();
     f.write(reinterpret_cast<const char*>(&ext_len), 1);
 
-    // Расширение
     if (ext_len > 0)
         f.write(extension.c_str(), ext_len);
 
-    // Зашифрованные данные
     f.write(reinterpret_cast<const char*>(ciphertext.data()),
             ciphertext.size());
 
@@ -91,25 +87,21 @@ bool load_encrypted_file(
         return false;
     }
 
-    // Читаем IV
     f.read(reinterpret_cast<char*>(out_iv), BLOCK_SIZE);
     if (f.gcount() != BLOCK_SIZE) {
         std::cerr << "[Ошибка] Файл слишком маленький (нет IV)\n";
         return false;
     }
 
-    // Читаем длину расширения
     unsigned char ext_len = 0;
     f.read(reinterpret_cast<char*>(&ext_len), 1);
 
-    // Читаем расширение
     out_extension.clear();
     if (ext_len > 0) {
         out_extension.resize(ext_len);
         f.read(&out_extension[0], ext_len);
     }
 
-    // Читаем шифртекст
     out_ciphertext.assign(
         std::istreambuf_iterator<char>(f),
         std::istreambuf_iterator<char>());

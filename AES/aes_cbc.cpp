@@ -8,7 +8,6 @@ std::vector<unsigned char> cbc_encrypt(
     const unsigned char* iv,
     const unsigned char* round_keys)
 {
-    // Добавляем PKCS#7 паддинг
     std::vector<unsigned char> data = plaintext;
     int pad_len = BLOCK_SIZE - (int)(data.size() % BLOCK_SIZE);
     for (int i = 0; i < pad_len; ++i)
@@ -22,7 +21,6 @@ std::vector<unsigned char> cbc_encrypt(
     for (int offset = 0; offset < (int)data.size(); offset += BLOCK_SIZE) {
         unsigned char block[BLOCK_SIZE];
 
-        // XOR с предыдущим зашифрованным блоком (или IV для первого блока)
         for (int i = 0; i < BLOCK_SIZE; ++i)
             block[i] = data[offset + i] ^ prev[i];
 
@@ -48,14 +46,12 @@ std::vector<unsigned char> cbc_decrypt(
         unsigned char decrypted[BLOCK_SIZE];
         decrypt_block(&ciphertext[offset], decrypted, round_keys);
 
-        // Обратный XOR — восстанавливаем оригинальные данные
         for (int i = 0; i < BLOCK_SIZE; ++i)
             result[offset + i] = decrypted[i] ^ prev[i];
 
         memcpy(prev, &ciphertext[offset], BLOCK_SIZE);
     }
 
-    // Снимаем PKCS#7 паддинг
     if (!result.empty()) {
         int pad = result.back();
         if (pad > 0 && pad <= BLOCK_SIZE)
