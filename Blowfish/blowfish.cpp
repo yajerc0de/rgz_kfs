@@ -332,7 +332,7 @@ bool Blowfish::setKey(const vector<uint8_t>& key) {
     // Обновляем P[0..17]
     for (int i = 0; i < P_ARRAY_SIZE; i += 2) {
         encryptBlock(L, R);
-        P[i] = L;
+        P[i]     = L;
         P[i + 1] = R;
     }
 
@@ -340,7 +340,7 @@ bool Blowfish::setKey(const vector<uint8_t>& key) {
     for (int box = 0; box < S_BOX_COUNT; box++) {
         for (int j = 0; j < S_BOX_SIZE; j += 2) {
             encryptBlock(L, R);
-            S[box][j] = L;
+            S[box][j]     = L;
             S[box][j + 1] = R;
         }
     }
@@ -436,4 +436,143 @@ void Blowfish::decryptBlock(uint32_t& L, uint32_t& R) const {
     swap(L, R);
     R ^= P[1];
     L ^= P[0];
+}
+
+// =============================================================================
+//  PKCS#7 паддинг
+//
+//  Дополняет данные до кратности BLOCK_BYTES (8 байт).
+//  Значение каждого добавленного байта = количество добавленных байт.
+//
+//  Пример: данные 5 байт → добавляем 3 байта со значением 0x03
+//  Если данные уже кратны 8 → добавляем целый блок из восьми байт 0x08
+// =============================================================================
+
+vector<uint8_t> Blowfish::pkcs7Pad(const vector<uint8_t>& data) {
+    uint8_t padLen = BLOCK_BYTES - (data.size() % BLOCK_BYTES);
+    vector<uint8_t> padded(data);
+    padded.insert(padded.end(), padLen, padLen);
+    return padded;
+}
+
+// Снимает PKCS#7 паддинг.
+// Бросает runtime_error если паддинг нарушен (неверный ключ или повреждённые данные).
+
+vector<uint8_t> Blowfish::pkcs7Unpad(const vector<uint8_t>& data) {
+    if (data.empty() || data.size() % BLOCK_BYTES != 0) {
+        throw runtime_error("Blowfish: неверный размер данных при снятии паддинга");
+    }
+
+    uint8_t padLen = data.back();
+
+    if (padLen == 0 || padLen > BLOCK_BYTES) {
+        throw runtime_error("Blowfish: повреждён PKCS#7 паддинг");
+    }
+
+    // Проверяем что все байты паддинга одинаковы
+    for (size_t i = data.size() - padLen; i < data.size(); i++) {
+        if (data[i] != padLen) {
+            throw runtime_error("Blowfish: неверный PKCS#7 паддинг (возможно, неверный ключ)");
+        }
+    }
+
+    return vector<uint8_t>(data.begin(), data.end() - padLen);
+}
+
+// =============================================================================
+//  encryptCBC — шифрование произвольных данных в режиме CBC
+//
+//  Алгоритм:
+//    1. Применяем PKCS#7 паддинг
+//    2. Первый блок XOR-ится с IV
+//    3. Каждый следующий блок XOR-ится с предыдущим шифроблоком
+//    4. Каждый блок шифруется через encryptBlock
+//
+//  C[0] = Encrypt(P[0] XOR IV)
+//  C[i] = Encrypt(P[i] XOR C[i-1])
+// =============================================================================
+
+vector<uint8_t> Blowfish::encryptCBC(const vector<uint8_t>& plaintext,
+                                      const vector<uint8_t>& iv) const {
+    if (!m_keyIsSet) {
+        throw runtime_error("Blowfish: ключ не установлен, вызовите setKey()");
+    }
+    if (iv.size() != BLOCK_BYTES) {
+        throw runtime_error("Blowfish: IV должен быть ровно 8 байт");
+    }
+
+    vector<uint8_t> padded   = pkcs7Pad(plaintext);
+    vector<uint8_t> cipher(padded.size());
+
+    // prev — предыдущий шифроблок (первый раз = IV)
+    uint8_t prev[BLOCK_BYTES];
+    memcpy(prev, iv.data(), BLOCK_BYTES);
+
+    for (size_t offset = 0; offset < padded.size(); offset += BLOCK_BYTES) {
+        // XOR открытого блока с предыдущим шифроблоком (или IV)
+        uint8_t block[BLOCK_BYTES];
+        for (int b = 0; b < BLOCK_BYTES; b++) {
+            block[b] = padded[offset + b] ^ prev[b];
+        }
+
+        // Шифруем блок
+        uint32_t L, R;
+        unpackBlock(block, L, R);
+        encryptBlock(L, R);
+        packBlock(L, R, &cipher[offset]);
+
+        // Сохраняем шифроблок как prev для следующей итерации
+        memcpy(prev, &cipher[offset], BLOCK_BYTES);
+    }
+
+    return cipher;
+}
+
+// =============================================================================
+//  decryptCBC — дешифрование в режиме CBC
+//
+//  C[i] = Encrypt(P[i] XOR C[i-1])  →  P[i] = Decrypt(C[i]) XOR C[i-1]
+//
+//  Важно: блоки дешифруются по одному слева направо,
+//  но XOR применяется с предыдущим ШИФРОБЛОКОМ (не открытым текстом).
+// =============================================================================
+
+vector<uint8_t> Blowfish::decryptCBC(const vector<uint8_t>& ciphertext,
+                                      const vector<uint8_t>& iv) const {
+    if (!m_keyIsSet) {
+        throw runtime_error("Blowfish: ключ не установлен, вызовите setKey()");
+    }
+    if (iv.size() != BLOCK_BYTES) {
+        throw runtime_error("Blowfish: IV должен быть ровно 8 байт");
+    }
+    if (ciphertext.empty() || ciphertext.size() % BLOCK_BYTES != 0) {
+        throw runtime_error("Blowfish: размер шифротекста не кратен 8 байтам");
+    }
+
+    vector<uint8_t> padded(ciphertext.size());
+
+    // prev — предыдущий шифроблок (первый раз = IV)
+    uint8_t prev[BLOCK_BYTES];
+    memcpy(prev, iv.data(), BLOCK_BYTES);
+
+    for (size_t offset = 0; offset < ciphertext.size(); offset += BLOCK_BYTES) {
+        // Дешифруем блок
+        uint32_t L, R;
+        unpackBlock(&ciphertext[offset], L, R);
+        decryptBlock(L, R);
+
+        uint8_t block[BLOCK_BYTES];
+        packBlock(L, R, block);
+
+        // XOR с предыдущим шифроблоком (или IV)
+        for (int b = 0; b < BLOCK_BYTES; b++) {
+            padded[offset + b] = block[b] ^ prev[b];
+        }
+
+        // Сохраняем текущий шифроблок как prev
+        memcpy(prev, &ciphertext[offset], BLOCK_BYTES);
+    }
+
+    // Снимаем паддинг — бросит исключение при неверном ключе
+    return pkcs7Unpad(padded);
 }
