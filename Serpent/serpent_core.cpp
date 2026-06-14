@@ -16,30 +16,24 @@ static unsigned int rotate_right(unsigned int x, int n) {
 }
 
 // Применяет один S-бокс к 4 словам (X0,X1,X2,X3), обрабатывая их побитово.
-// Для каждого бита i берём i-тый бит из каждого слова,
-// пропускаем его через S-бокс, и записываем результат обратно по битам в X0,X1,X2,X3.
-// inverse   - true, если нужно использовать обратный S-бокс
 static void apply_sbox(unsigned int& x0, unsigned int& x1, unsigned int& x2, unsigned int& x3,
                         int box_index, bool inverse)
 {
     unsigned int out0 = 0, out1 = 0, out2 = 0, out3 = 0;
 
     for (int bit = 0; bit < 32; ++bit) {
-        // Собираем 4-битное входное значение из бита "bit" каждого слова
         unsigned char nibble = 0;
         nibble |= (unsigned char)(((x0 >> bit) & 1) << 0);
         nibble |= (unsigned char)(((x1 >> bit) & 1) << 1);
         nibble |= (unsigned char)(((x2 >> bit) & 1) << 2);
         nibble |= (unsigned char)(((x3 >> bit) & 1) << 3);
 
-        // Прогоняем через нужный S-бокс (прямой или обратный)
         unsigned char result;
         if (inverse)
             result = serpent_sbox_inv[box_index][nibble];
         else
             result = serpent_sbox[box_index][nibble];
 
-        // Раскладываем результат обратно по словам
         out0 |= (unsigned int)((result >> 0) & 1) << bit;
         out1 |= (unsigned int)((result >> 1) & 1) << bit;
         out2 |= (unsigned int)((result >> 2) & 1) << bit;
@@ -113,35 +107,28 @@ static void words_to_bytes(unsigned int x0, unsigned int x1, unsigned int x2, un
 
 //  Разворачивание ключа (Key Schedule)
 
-// Константа, используемая при разворачивании ключа
 const unsigned int PHI = 0x9E3779B9u;
 
 void serpent_expand_key(const unsigned char* cipher_key, unsigned int* subkeys) {
-    // Шаг 1: разбиваем 128-битный ключ на 4 слова w0..w3
     unsigned int w[8 + 132];
 
     unsigned int k0, k1, k2, k3;
     bytes_to_words(cipher_key, k0, k1, k2, k3);
 
-    // Ключ 128 бит дополняется до 256 бит:
-    // после 4 слов ключа ставится бит "1", остальное - нули.
     w[-8 + 8] = k0;
     w[-7 + 8] = k1;
     w[-6 + 8] = k2;
     w[-5 + 8] = k3;
-    w[-4 + 8] = 1; // дополняющий бит "1" сразу после 128-битного ключа
+    w[-4 + 8] = 1; 
     w[-3 + 8] = 0;
     w[-2 + 8] = 0;
     w[-1 + 8] = 0;
 
-    // Генерируем расширенные слова
     for (int i = 0; i < 132; ++i) {
         unsigned int val = w[(i - 8) + 8] ^ w[(i - 5) + 8] ^ w[(i - 3) + 8] ^ w[(i - 1) + 8] ^ PHI ^ (unsigned int)i;
         w[i + 8] = rotate_left(val, 11);
     }
 
-    // Шаг 2: из слов w[0]..w[131] формируем 33 предключа K0..K32, пропуская группы по 4 слова через S-боксы.
-    // номер S-бокса для подключа i равен (35 - i) % 8.
     for (int i = 0; i < 33; ++i) {
         unsigned int x0 = w[i * 4 + 0 + 8];
         unsigned int x1 = w[i * 4 + 1 + 8];
@@ -165,19 +152,15 @@ void serpent_encrypt_block(const unsigned char* input, unsigned char* output, co
     bytes_to_words(input, x0, x1, x2, x3);
 
     for (int round = 0; round < NUM_ROUNDS; ++round) {
-        // 1. XOR с подключом текущего раунда
         xor_with_subkey(x0, x1, x2, x3, subkeys, round);
 
-        // 2. Применяем S-бокс номер (round % 8)
         apply_sbox(x0, x1, x2, x3, round % 8, false);
 
-        // 3. Линейное преобразование (кроме последнего раунда)
         if (round < NUM_ROUNDS - 1) {
             linear_transform(x0, x1, x2, x3);
         }
     }
 
-    // Финальный XOR с последним подключом K32
     xor_with_subkey(x0, x1, x2, x3, subkeys, NUM_ROUNDS);
 
     words_to_bytes(x0, x1, x2, x3, output);
@@ -187,19 +170,15 @@ void serpent_decrypt_block(const unsigned char* input, unsigned char* output, co
     unsigned int x0, x1, x2, x3;
     bytes_to_words(input, x0, x1, x2, x3);
 
-    // Снимаем финальный XOR с K32
     xor_with_subkey(x0, x1, x2, x3, subkeys, NUM_ROUNDS);
 
     for (int round = NUM_ROUNDS - 1; round >= 0; --round) {
-        // 1. Обратное линейное преобразование (кроме последнего раунда шифрования)
         if (round < NUM_ROUNDS - 1) {
             inverse_linear_transform(x0, x1, x2, x3);
         }
 
-        // 2. Обратный S-бокс номер (round % 8)
         apply_sbox(x0, x1, x2, x3, round % 8, true);
 
-        // 3. XOR с подключом текущего раунда
         xor_with_subkey(x0, x1, x2, x3, subkeys, round);
     }
 

@@ -6,5 +6,5 @@
 // Прямые S-боксы (для шифрования)
 extern const unsigned char serpent_sbox[8][16];
 
-// Обратные S-боксы (для дешифрования) - инверсия таблиц выше
+// Обратные S-боксы (для дешифрования)
 extern const unsigned char serpent_sbox_inv[8][16];
