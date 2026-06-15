@@ -2,10 +2,11 @@
 #include <string>
 #include <limits>
 
+#include "TEA/tea.h"
 
 using namespace std;
 
-// ─── Прототипы точек входа в модули (будут реализованы позже) ────────────────
+// ─── Прототипы точек входа в модули ──────────────────────────────────────────
 void runSpeck();
 void runRC5();
 void runAES();
@@ -16,7 +17,6 @@ void runTEA();
 
 namespace UI {
 
-// Горизонтальный разделитель
 void printSeparator(char ch = '-', int width = 50) {
     cout << string(width, ch) << "\n";
 }
@@ -43,7 +43,6 @@ void printMenu() {
     printSeparator();
 }
 
-// Возвращает выбранный пункт меню (0–6), при ошибке ввода возвращает -1
 int readChoice() {
     int choice = -1;
     cout << "  Введите номер алгоритма: ";
@@ -72,15 +71,14 @@ void printNotImplemented(const string& name) {
 
 } // namespace UI
 
-// ─── Заглушки модулей ─────────────────────────────────────────────────────────
-// Когда модуль будет реализован — удалите его заглушку отсюда
-// и подключите соответствующий заголовочный файл вверху.
+// ─── Заглушки модулей ────────────────────────────────────────────────────────
+// Когда модуль будет реализован — удалите его заглушку и подключите .h файл
 
 void runSpeck()    { UI::printNotImplemented("Speck");    }
 void runRC5()      { UI::printNotImplemented("RC5");      }
 void runAES()      { UI::printNotImplemented("AES");      }
 void runSerpent()  { UI::printNotImplemented("Serpent");  }
-void runTEA()      { UI::printNotImplemented("TEA");      }
+void runBlowfish() { UI::printNotImplemented("Blowfish"); }
 // ─────────────────────────────────────────────────────────────────────────────
 
 int main() {
