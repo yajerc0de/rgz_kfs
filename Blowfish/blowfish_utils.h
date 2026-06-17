@@ -35,11 +35,28 @@ string extractFilename(const string& path);
 // Извлечь расширение с точкой: "photo.jpg" -> ".jpg"
 string extractExtension(const string& path);
 
-// Encryptfiles/encrypted_<имя файла>  (папка создаётся автоматически)
+// Собрать путь для зашифрованного файла.
+// Результат: Encryptfiles/encrypted_<имя файла без расширения>.bin
+// Расширение всегда .bin — оригинальное имя/расширение хранится внутри файла.
 string buildEncryptPath(const string& sourcePath);
 
-// Decryptfiles/decrypted_<имя файла>  (папка создаётся автоматически)
-string buildDecryptPath(const string& sourcePath);
+// Собрать путь для расшифрованного файла.
+// originalName — оригинальное имя, извлечённое из метаданных внутри .bin файла.
+// Результат: Decryptfiles/decrypted_<originalName>
+string buildDecryptPath(const string& originalName);
+
+// ─── Метаданные имени файла (для шифрования файлов) ──────────────────────────
+
+// Упаковать оригинальное имя файла в бинарный префикс:
+// [4 байта: длина имени (little-endian uint32_t)][N байт: имя файла UTF-8]
+vector<uint8_t> packFilenameHeader(const string& originalFilename);
+
+// Распаковать имя файла из начала буфера.
+// Возвращает true при успехе; originalFilename получает извлечённое имя,
+// bytesConsumed — сколько байт занял заголовок (4 + длина имени).
+bool unpackFilenameHeader(const vector<uint8_t>& data,
+                           string& originalFilename,
+                           size_t& bytesConsumed);
 
 // ─── Ключи и IV ──────────────────────────────────────────────────────────────
 

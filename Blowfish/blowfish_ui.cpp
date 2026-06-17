@@ -111,7 +111,7 @@ static void modeFile(Blowfish& bf) {
         vector<uint8_t> plain;
         if (!readFile(inPath, plain)) return;
 
-        // Автоматически строим путь: Encryptfiles/encrypted_<имя файла>
+        // Выходной файл всегда .bin — оригинальное имя хранится внутри
         string outPath = buildEncryptPath(inPath);
 
         vector<uint8_t> iv = generateAndSave(IV_FILE, Blowfish::BLOCK_BYTES, "IV");
@@ -120,21 +120,27 @@ static void modeFile(Blowfish& bf) {
         try {
             vector<uint8_t> cipher = bf.encryptCBC(plain, iv);
 
-            // Формат файла: [8 байт IV][шифротекст]
+            // Заголовок с оригинальным именем файла (например "2.jpg")
+            string originalName = extractFilename(inPath);
+            vector<uint8_t> nameHeader = packFilenameHeader(originalName);
+
+            // Формат файла: [заголовок имени][8 байт IV][шифротекст]
             vector<uint8_t> output;
-            output.insert(output.end(), iv.begin(),     iv.end());
-            output.insert(output.end(), cipher.begin(), cipher.end());
+            output.insert(output.end(), nameHeader.begin(), nameHeader.end());
+            output.insert(output.end(), iv.begin(),         iv.end());
+            output.insert(output.end(), cipher.begin(),     cipher.end());
 
             if (!writeFile(outPath, output)) return;
 
             cout << "\n";
             printSep();
-            cout << "  Исходный файл   : " << inPath        << "\n";
-            cout << "  Зашифрован в    : " << outPath        << "\n";
-            cout << "  Исходный размер : " << plain.size()   << " байт\n";
-            cout << "  Итоговый размер : " << output.size()  << " байт\n";
-            cout << "  Ключ сохранён в : " << KEY_FILE       << "\n";
-            cout << "  IV сохранён в   : " << IV_FILE        << "\n";
+            cout << "  Исходный файл     : " << inPath        << "\n";
+            cout << "  Оригинальное имя  : " << originalName  << " (сохранено внутри .bin)\n";
+            cout << "  Зашифрован в      : " << outPath       << "\n";
+            cout << "  Исходный размер   : " << plain.size()  << " байт\n";
+            cout << "  Итоговый размер   : " << output.size() << " байт\n";
+            cout << "  Ключ сохранён в   : " << KEY_FILE      << "\n";
+            cout << "  IV сохранён в     : " << IV_FILE       << "\n";
             printSep();
         } catch (const exception& e) {
             cout << "\n  [!] Ошибка: " << e.what() << "\n";
@@ -149,20 +155,32 @@ static void modeFile(Blowfish& bf) {
         vector<uint8_t> raw;
         if (!readFile(inPath, raw)) return;
 
-        if (raw.size() < static_cast<size_t>(Blowfish::BLOCK_BYTES * 2)) {
+        // Извлекаем заголовок с оригинальным именем
+        string originalName;
+        size_t headerSize = 0;
+        if (!unpackFilenameHeader(raw, originalName, headerSize)) {
+            cout << "\n  [!] Не удалось прочитать имя файла из метаданных.\n";
+            cout << "  Файл повреждён или не был зашифрован этой программой.\n";
+            return;
+        }
+
+        // После заголовка идёт IV (8 байт), затем шифротекст
+        if (raw.size() < headerSize + static_cast<size_t>(Blowfish::BLOCK_BYTES * 2)) {
             cout << "\n  [!] Файл слишком мал или повреждён.\n";
             return;
         }
 
-        // Автоматически строим путь: Decryptfiles/decrypted_<имя файла>
-        string outPath = buildDecryptPath(inPath);
+        vector<uint8_t> iv(raw.begin() + headerSize,
+                            raw.begin() + headerSize + Blowfish::BLOCK_BYTES);
+        vector<uint8_t> cipher(raw.begin() + headerSize + Blowfish::BLOCK_BYTES,
+                                raw.end());
 
-        // IV извлекаем из первых 8 байт файла
-        vector<uint8_t> iv(raw.begin(), raw.begin() + Blowfish::BLOCK_BYTES);
-        vector<uint8_t> cipher(raw.begin() + Blowfish::BLOCK_BYTES, raw.end());
+        // Путь назначения строится из оригинального имени, извлечённого из файла
+        string outPath = buildDecryptPath(originalName);
 
-        cout << "  [IV] Извлечён из файла (первые 8 байт)\n";
-        cout << "  [IV] HEX: " << bytesToHex(iv) << "\n";
+        cout << "  [ИМЯ] Восстановлено из метаданных: " << originalName << "\n";
+        cout << "  [IV]  Извлечён из файла\n";
+        cout << "  [IV]  HEX: " << bytesToHex(iv) << "\n";
 
         try {
             vector<uint8_t> plain = bf.decryptCBC(cipher, iv);
