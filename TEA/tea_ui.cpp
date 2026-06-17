@@ -104,6 +104,7 @@ static void modeFile(TEA& tea) {
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
     if (choice == 1) {
+        // ── Шифрование ────────────────────────────────────────────────────────
         cout << "\n  Путь к исходному файлу: ";
         string inPath;
         getline(cin, inPath);
@@ -111,6 +112,7 @@ static void modeFile(TEA& tea) {
         vector<uint8_t> plain;
         if (!readFile(inPath, plain)) return;
 
+        // Выходной файл всегда .bin — оригинальное имя хранится внутри
         string outPath = buildEncryptPath(inPath);
 
         vector<uint8_t> iv = generateAndSave(IV_FILE, TEA::BLOCK_BYTES, "IV");
@@ -119,27 +121,34 @@ static void modeFile(TEA& tea) {
         try {
             vector<uint8_t> cipher = tea.encryptCBC(plain, iv);
 
-            // Формат файла: [8 байт IV][шифротекст]
+            // Заголовок с оригинальным именем файла (например "2.jpg")
+            string originalName = extractFilename(inPath);
+            vector<uint8_t> nameHeader = packFilenameHeader(originalName);
+
+            // Формат файла: [заголовок имени][8 байт IV][шифротекст]
             vector<uint8_t> output;
-            output.insert(output.end(), iv.begin(),     iv.end());
-            output.insert(output.end(), cipher.begin(), cipher.end());
+            output.insert(output.end(), nameHeader.begin(), nameHeader.end());
+            output.insert(output.end(), iv.begin(),         iv.end());
+            output.insert(output.end(), cipher.begin(),     cipher.end());
 
             if (!writeFile(outPath, output)) return;
 
             cout << "\n";
             printSep();
-            cout << "  Исходный файл   : " << inPath        << "\n";
-            cout << "  Зашифрован в    : " << outPath        << "\n";
-            cout << "  Исходный размер : " << plain.size()   << " байт\n";
-            cout << "  Итоговый размер : " << output.size()  << " байт\n";
-            cout << "  Ключ сохранён в : " << KEY_FILE       << "\n";
-            cout << "  IV сохранён в   : " << IV_FILE        << "\n";
+            cout << "  Исходный файл     : " << inPath        << "\n";
+            cout << "  Оригинальное имя  : " << originalName  << " (сохранено внутри .bin)\n";
+            cout << "  Зашифрован в      : " << outPath       << "\n";
+            cout << "  Исходный размер   : " << plain.size()  << " байт\n";
+            cout << "  Итоговый размер   : " << output.size() << " байт\n";
+            cout << "  Ключ сохранён в   : " << KEY_FILE      << "\n";
+            cout << "  IV сохранён в     : " << IV_FILE       << "\n";
             printSep();
         } catch (const exception& e) {
             cout << "\n  [!] Ошибка: " << e.what() << "\n";
         }
 
     } else if (choice == 2) {
+        // ── Дешифрование ──────────────────────────────────────────────────────
         cout << "\n  Путь к зашифрованному файлу: ";
         string inPath;
         getline(cin, inPath);
@@ -147,19 +156,32 @@ static void modeFile(TEA& tea) {
         vector<uint8_t> raw;
         if (!readFile(inPath, raw)) return;
 
-        if (raw.size() < static_cast<size_t>(TEA::BLOCK_BYTES * 2)) {
+        // Извлекаем заголовок с оригинальным именем
+        string originalName;
+        size_t headerSize = 0;
+        if (!unpackFilenameHeader(raw, originalName, headerSize)) {
+            cout << "\n  [!] Не удалось прочитать имя файла из метаданных.\n";
+            cout << "  Файл повреждён или не был зашифрован этой программой.\n";
+            return;
+        }
+
+        // После заголовка идёт IV (8 байт), затем шифротекст
+        if (raw.size() < headerSize + static_cast<size_t>(TEA::BLOCK_BYTES * 2)) {
             cout << "\n  [!] Файл слишком мал или повреждён.\n";
             return;
         }
 
-        string outPath = buildDecryptPath(inPath);
+        vector<uint8_t> iv(raw.begin() + headerSize,
+                            raw.begin() + headerSize + TEA::BLOCK_BYTES);
+        vector<uint8_t> cipher(raw.begin() + headerSize + TEA::BLOCK_BYTES,
+                                raw.end());
 
-        // IV извлекаем из первых 8 байт файла
-        vector<uint8_t> iv(raw.begin(), raw.begin() + TEA::BLOCK_BYTES);
-        vector<uint8_t> cipher(raw.begin() + TEA::BLOCK_BYTES, raw.end());
+        // Путь назначения строится из оригинального имени, извлечённого из файла
+        string outPath = buildDecryptPath(originalName);
 
-        cout << "  [IV] Извлечён из файла (первые 8 байт)\n";
-        cout << "  [IV] HEX: " << bytesToHex(iv) << "\n";
+        cout << "  [ИМЯ] Восстановлено из метаданных: " << originalName << "\n";
+        cout << "  [IV]  Извлечён из файла\n";
+        cout << "  [IV]  HEX: " << bytesToHex(iv) << "\n";
 
         try {
             vector<uint8_t> plain = tea.decryptCBC(cipher, iv);
@@ -167,9 +189,9 @@ static void modeFile(TEA& tea) {
 
             cout << "\n";
             printSep();
-            cout << "  Зашифрованный файл: " << inPath      << "\n";
-            cout << "  Расшифрован в     : " << outPath      << "\n";
-            cout << "  Размер данных     : " << plain.size() << " байт\n";
+            cout << "  Зашифрованный файл: " << inPath       << "\n";
+            cout << "  Расшифрован в     : " << outPath       << "\n";
+            cout << "  Размер данных     : " << plain.size()  << " байт\n";
             printSep();
         } catch (const exception& e) {
             cout << "\n  [!] Ошибка: " << e.what()

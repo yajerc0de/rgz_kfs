@@ -43,14 +43,30 @@ bool ensureDir(const string& dirPath);
 string extractFilename(const string& path);
 
 // Собрать путь для зашифрованного файла.
-// Результат: Encryptfiles/encrypted_<имя файла>
+// Результат: Encryptfiles/encrypted_<имя файла без расширения>.bin
+// Расширение всегда .bin — оригинальное имя/расширение хранится внутри файла.
 // Папка создаётся автоматически если не существует.
 string buildEncryptPath(const string& sourcePath);
 
 // Собрать путь для расшифрованного файла.
-// Результат: Decryptfiles/decrypted_<имя файла без префикса encrypted_>
+// originalName — оригинальное имя, извлечённое из метаданных внутри .bin файла.
+// Результат: Decryptfiles/decrypted_<originalName>
 // Папка создаётся автоматически если не существует.
-string buildDecryptPath(const string& sourcePath);
+string buildDecryptPath(const string& originalName);
+
+// ─── Метаданные имени файла (для шифрования файлов) ──────────────────────────
+
+// Упаковать оригинальное имя файла в бинарный префикс:
+// [4 байта: длина имени (little-endian uint32_t)][N байт: имя файла UTF-8]
+vector<uint8_t> packFilenameHeader(const string& originalFilename);
+
+// Распаковать имя файла из начала буфера.
+// Возвращает true при успехе; originalFilename получает извлечённое имя,
+// bytesConsumed — сколько байт занял заголовок (4 + длина имени).
+// Возвращает false если данных недостаточно или длина некорректна.
+bool unpackFilenameHeader(const vector<uint8_t>& data,
+                           string& originalFilename,
+                           size_t& bytesConsumed);
 
 // ─── Ключи и IV ──────────────────────────────────────────────────────────────
 

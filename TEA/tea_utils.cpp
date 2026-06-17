@@ -116,24 +116,73 @@ string extractFilename(const string& path) {
 string buildEncryptPath(const string& sourcePath) {
     const string dir = "Encryptfiles";
     ensureDir(dir);
-    return dir + "/" + "encrypted_" + extractFilename(sourcePath);
+
+    // Берём имя файла без расширения, добавляем .bin
+    // Оригинальное расширение хранится внутри файла, а не в имени на диске
+    string filename = extractFilename(sourcePath);
+
+    size_t dotPos = filename.find_last_of('.');
+    string baseName = (dotPos == string::npos) ? filename : filename.substr(0, dotPos);
+
+    return dir + "/" + "encrypted_" + baseName + ".bin";
 }
 
-string buildDecryptPath(const string& sourcePath) {
+string buildDecryptPath(const string& originalName) {
     const string dir = "Decryptfiles";
     ensureDir(dir);
 
-    string filename = extractFilename(sourcePath);
+    // originalName уже извлечён из метаданных внутри .bin файла —
+    // здесь просто собираем путь, без дополнительной обработки имени
+    return dir + "/" + "decrypted_" + originalName;
+}
 
-    // Убираем префикс "encrypted_" если он есть
-    const string prefix = "encrypted_";
-    if (filename.size() > prefix.size() &&
-        filename.substr(0, prefix.size()) == prefix)
-    {
-        filename = filename.substr(prefix.size());
-    }
+// =============================================================================
+//  Метаданные имени файла
+//
+//  Формат: [4 байта длина имени, little-endian][N байт имя файла UTF-8]
+// =============================================================================
 
-    return dir + "/" + "decrypted_" + filename;
+vector<uint8_t> packFilenameHeader(const string& originalFilename) {
+    uint32_t nameLen = static_cast<uint32_t>(originalFilename.size());
+
+    vector<uint8_t> header;
+    header.reserve(4 + nameLen);
+
+    // Длина имени — 4 байта little-endian
+    header.push_back(static_cast<uint8_t>( nameLen        & 0xFF));
+    header.push_back(static_cast<uint8_t>((nameLen >> 8)  & 0xFF));
+    header.push_back(static_cast<uint8_t>((nameLen >> 16) & 0xFF));
+    header.push_back(static_cast<uint8_t>((nameLen >> 24) & 0xFF));
+
+    // Само имя файла
+    header.insert(header.end(), originalFilename.begin(), originalFilename.end());
+
+    return header;
+}
+
+bool unpackFilenameHeader(const vector<uint8_t>& data,
+                           string& originalFilename,
+                           size_t& bytesConsumed)
+{
+    if (data.size() < 4)
+        return false;
+
+    uint32_t nameLen = static_cast<uint32_t>(data[0])
+                      | (static_cast<uint32_t>(data[1]) << 8)
+                      | (static_cast<uint32_t>(data[2]) << 16)
+                      | (static_cast<uint32_t>(data[3]) << 24);
+
+    // Защита от повреждённых данных — разумный верхний предел длины имени
+    const uint32_t MAX_NAME_LEN = 4096;
+    if (nameLen == 0 || nameLen > MAX_NAME_LEN)
+        return false;
+
+    if (data.size() < 4 + static_cast<size_t>(nameLen))
+        return false;
+
+    originalFilename.assign(data.begin() + 4, data.begin() + 4 + nameLen);
+    bytesConsumed = 4 + nameLen;
+    return true;
 }
 
 // =============================================================================
