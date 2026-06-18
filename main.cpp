@@ -2,7 +2,7 @@
 #include <string>
 #include <limits>
 
-#include "TEA/tea.h"
+#include "TEA/algo/tea.h"
 
 using namespace std;
 
