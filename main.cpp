@@ -2,7 +2,7 @@
 #include <string>
 #include <limits>
 
-#include "Blowfish/blowfish.h"
+#include "Blowfish/algo/blowfish.h"
 
 using namespace std;
 
