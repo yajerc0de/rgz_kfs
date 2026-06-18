@@ -57,8 +57,8 @@ void run_encrypt_mode() {
     InputSource src = ask_input_source();
 
     std::vector<unsigned char> plaintext;
-    std::string out_filename;     // Имя выходного зашифрованного файла
-    std::string original_ext;     // Расширение исходного файла (для последующего восстановления)
+    std::string out_filename;
+    std::string original_ext;
 
     if (src == InputSource::TEXT_CONSOLE) {
         std::cout << "Введите текст для шифрования:\n> ";
@@ -72,7 +72,7 @@ void run_encrypt_mode() {
 
         plaintext.assign(text.begin(), text.end());
         out_filename = "encrypted_text.bin";
-        original_ext = "txt"; // текст с консоли при расшифровке восстановится как .txt
+        original_ext = "txt";
 
     } else {
         std::cout << "Введите путь к файлу: ";
@@ -81,32 +81,25 @@ void run_encrypt_mode() {
 
         if (!read_binary_file(filepath, plaintext)) return;
 
-        // Запоминаем расширение исходного файла, чтобы восстановить его при дешифровке
         original_ext = get_file_extension(filepath);
 
-        // Имя выходного файла: имя_исходного_encrypted.bin
         out_filename = get_file_name_without_extension(filepath) + "_encrypted.bin";
     }
 
-    // Генерируем ключ и сохраняем в key.bin рядом с программой
     unsigned char cipher_key[KEY_SIZE];
     std::string key_path = get_output_dir() + "key.bin";
     if (!generate_and_save_key(key_path, cipher_key)) return;
 
-    // Разворачиваем подключи Serpent
     unsigned int subkeys[SUBKEYS_COUNT];
     serpent_expand_key(cipher_key, subkeys);
 
-    // Генерируем IV
     unsigned char iv[BLOCK_SIZE];
     generate_iv(iv);
     print_hex("Вектор инициализации IV (HEX)", iv, BLOCK_SIZE);
 
-    // Шифруем данные
     std::cout << "\nШифрование...\n";
     std::vector<unsigned char> ciphertext = serpent_cbc_encrypt(plaintext, iv, subkeys);
 
-    // Сохраняем: IV + расширение + зашифрованные данные в один файл
     std::string out_path = get_output_dir() + out_filename;
     if (!save_encrypted_file(out_path, iv, original_ext, ciphertext)) return;
 
@@ -122,27 +115,22 @@ void run_encrypt_mode() {
 void run_decrypt_mode() {
     std::cout << "\n--- РЕЖИМ ДЕШИФРОВАНИЯ ---\n";
 
-    // Запрашиваем файл для расшифровки
     std::cout << "Введите путь к зашифрованному файлу (.bin): ";
     std::string enc_path;
     std::getline(std::cin, enc_path);
 
-    // Запрашиваем файл ключа
     std::cout << "Введите путь к файлу ключа (key.bin): ";
     std::string key_path;
     std::getline(std::cin, key_path);
 
-    // Загружаем ключ
     unsigned char cipher_key[KEY_SIZE];
     if (!load_key(key_path, cipher_key)) return;
 
     print_hex("Загружен ключ (HEX)", cipher_key, KEY_SIZE);
 
-    // Разворачиваем подключи Serpent
     unsigned int subkeys[SUBKEYS_COUNT];
     serpent_expand_key(cipher_key, subkeys);
 
-    // Загружаем IV, расширение и зашифрованные данные из файла
     unsigned char iv[BLOCK_SIZE];
     std::string original_ext;
     std::vector<unsigned char> ciphertext;
@@ -152,7 +140,6 @@ void run_decrypt_mode() {
     std::cout << "Исходное расширение: " << (original_ext.empty() ? "(нет)" : original_ext) << "\n";
     std::cout << "Размер зашифрованных данных: " << ciphertext.size() << " байт\n";
 
-    // Расшифровываем
     std::cout << "\nРасшифровка...\n";
     std::vector<unsigned char> plaintext = serpent_cbc_decrypt(ciphertext, iv, subkeys);
 
@@ -161,10 +148,8 @@ void run_decrypt_mode() {
         return;
     }
 
-    // Формируем имя выходного файла, восстанавливая исходное расширение
     std::string base_name = get_file_name_without_extension(enc_path);
 
-    // Убираем суффикс "_encrypted" из имени, если он есть, чтобы имя было чище
     std::string suffix = "_encrypted";
     int base_len = (int)base_name.size();
     int suf_len = (int)suffix.size();
@@ -183,7 +168,6 @@ void run_decrypt_mode() {
     std::cout << "\n[OK] Расшифрованный файл сохранён: " << out_path << "\n";
     std::cout << "     Размер расшифрованных данных: " << plaintext.size() << " байт\n";
 
-    // Если расширение - txt (или его нет) и данные похожи на текст, показываем превью
     bool looks_like_text = (original_ext == "txt" || original_ext.empty());
     if (looks_like_text) {
         int preview_len = (int)plaintext.size();
