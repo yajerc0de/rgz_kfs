@@ -7,7 +7,7 @@
 
 #define TEA_BUILD_DLL
 #include "tea_capi.h"
-#include "tea.h"
+#include "../algo/tea.h"
 
 #include <cstdlib>
 #include <cstring>

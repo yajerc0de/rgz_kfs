@@ -1,7 +1,7 @@
 #pragma once
 
-#include "loader.h"
-#include "tea_capi.h"
+#include "../../core/loader.h"
+#include "../capi/tea_capi.h"
 
 // =============================================================================
 //  tea_module_api.h — обёртка над DynamicLibrary специально для TEA
