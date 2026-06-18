@@ -1,5 +1,5 @@
 #define AES_BUILDING_LIB
-#include "utils.h"
+#include "aes_utils.h"
 #include "aes_core.h"
 
 #include <iostream>
