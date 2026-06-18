@@ -6,6 +6,7 @@
 #include <limits>
 
 using namespace std;
+using namespace TeaUtils; // hexToBytes, bytesToHex, readFile, writeFile и т.д.
 
 // =============================================================================
 //  tea_ui.cpp — консольный интерфейс модуля TEA

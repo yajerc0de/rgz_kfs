@@ -69,7 +69,7 @@ set_target_properties(blowfish PROPERTIES PREFIX "")
 
 add_executable(app
     main.cpp
-    core/module_loader.cpp
+    core/loader.cpp
 
     TEA/ui/tea_ui.cpp
     TEA/ui/tea_utils.cpp

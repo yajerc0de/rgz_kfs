@@ -16,6 +16,8 @@
 
 using namespace std;
 
+namespace BlowfishUtils {
+
 // =============================================================================
 //  HEX
 // =============================================================================
@@ -209,3 +211,5 @@ vector<uint8_t> loadFromFile(const string& filepath, const string& label) {
     cout << "  [" << label << "] HEX: " << bytesToHex(data) << "\n";
     return data;
 }
+
+} // namespace BlowfishUtils

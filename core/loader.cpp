@@ -1,10 +1,20 @@
-#include "loader.h"
-
 #ifdef _WIN32
+    // Эти макросы должны быть определены ДО включения <windows.h>:
+    //  - WIN32_LEAN_AND_MEAN убирает редко используемые части windows.h
+    //    (в т.ч. часть COM-заголовков, которые конфликтуют с std::byte)
+    //  - NOMINMAX отключает макросы min/max, которые иначе ломают <algorithm>
+    #ifndef WIN32_LEAN_AND_MEAN
+        #define WIN32_LEAN_AND_MEAN
+    #endif
+    #ifndef NOMINMAX
+        #define NOMINMAX
+    #endif
     #include <windows.h>
 #else
     #include <dlfcn.h>
 #endif
+
+#include "loader.h"
 
 using namespace std;
 

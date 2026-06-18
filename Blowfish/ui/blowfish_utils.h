@@ -10,7 +10,14 @@ using namespace std;
 //  blowfish_utils.h — утилиты для модуля Blowfish
 //  Конвертация HEX, работа с файлами, генерация случайных байт
 //  Не использует <filesystem> — совместимо с MinGW и старыми компиляторами
+//
+//  Всё обёрнуто в namespace BlowfishUtils, потому что app.exe линкует
+//  utils-файлы ВСЕХ шифров одновременно (TEA, Blowfish, ...), а у них
+//  совпадают имена функций (hexToBytes, readFile и т.д.) — без namespace
+//  это конфликт линковки (LNK2005 / multiple definition).
 // =============================================================================
+
+namespace BlowfishUtils {
 
 // ─── HEX ─────────────────────────────────────────────────────────────────────
 
@@ -62,3 +69,5 @@ bool unpackFilenameHeader(const vector<uint8_t>& data,
 
 vector<uint8_t> generateAndSave(const string& filepath, size_t byteCount, const string& label);
 vector<uint8_t> loadFromFile(const string& filepath, const string& label);
+
+} // namespace BlowfishUtils

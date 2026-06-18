@@ -7,6 +7,7 @@
 #include <algorithm>
 
 using namespace std;
+using namespace BlowfishUtils; // hexToBytes, bytesToHex, readFile, writeFile и т.д.
 
 // =============================================================================
 //  blowfish_ui.cpp — консольный интерфейс модуля Blowfish

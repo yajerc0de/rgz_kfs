@@ -9,7 +9,14 @@ using namespace std;
 // =============================================================================
 //  tea_utils.h — утилиты для модуля TEA
 //  Конвертация HEX, работа с файлами, генерация случайных байт
+//
+//  Всё обёрнуто в namespace TeaUtils, потому что app.exe линкует utils-файлы
+//  ВСЕХ шифров одновременно (TEA, Blowfish, ...), а у них совпадают имена
+//  функций (hexToBytes, readFile и т.д.) — без namespace это конфликт
+//  линковки (LNK2005 / multiple definition).
 // =============================================================================
+
+namespace TeaUtils {
 
 // ─── HEX ─────────────────────────────────────────────────────────────────────
 
@@ -77,3 +84,5 @@ vector<uint8_t> generateAndSave(const string& filepath, size_t byteCount, const 
 // Загрузить байты из файла (ключ или IV).
 // При ошибке выводит сообщение и возвращает пустой вектор.
 vector<uint8_t> loadFromFile(const string& filepath, const string& label);
+
+} // namespace TeaUtils
