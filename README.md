@@ -93,10 +93,7 @@ rgz_kfs/
 программу одной командой:
 
 ```bash
-mkdir build
-cd build
-cmake ..
-cmake --build .
+mkdir build && cd build && cmake .. && cmake --build .
 ```
 
 После сборки в папке `build/` будут лежать `app.exe`/`app` и все `.dll`/`.so`
