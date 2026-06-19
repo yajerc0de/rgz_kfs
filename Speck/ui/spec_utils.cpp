@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <random>
 #include <algorithm>
+#include <cstring>
 
 #ifdef _WIN32
     #include <direct.h>
