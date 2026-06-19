@@ -1,4 +1,3 @@
-#define BLOWFISH_BUILD_DLL
 #include "blowfish_capi.h"
 #include "../algo/blowfish.h"
 

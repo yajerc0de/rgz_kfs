@@ -47,7 +47,7 @@ static void mode_text(TEAModule& mod, TEAHandle handle) {
         string text;
         getline(cin, text);
 
-        vector<uint8_t> iv = tea_generate_and_save(IV_FILE, TEA_BLOCK_BYTES, "IV");
+        vector<uint8_t> iv = tea_generate_and_save(IV_FILE, TEA_CAPI_BLOCK_BYTES, "IV");
         if (iv.empty()) return;
 
         vector<uint8_t> plain(text.begin(), text.end());
@@ -80,7 +80,7 @@ static void mode_text(TEAModule& mod, TEAHandle handle) {
         cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
         vector<uint8_t> iv = tea_load_from_file(IV_FILE, "IV");
-        if (iv.empty() || iv.size() != TEA_BLOCK_BYTES) {
+        if (iv.empty() || iv.size() != TEA_CAPI_BLOCK_BYTES) {
             cout << "\n  [!] Неверный IV в файле " << IV_FILE << "\n";
             return;
         }
@@ -141,7 +141,7 @@ static void mode_file(TEAModule& mod, TEAHandle handle) {
 
         string outPath = tea_build_encrypt_path(inPath);
 
-        vector<uint8_t> iv = tea_generate_and_save(IV_FILE, TEA_BLOCK_BYTES, "IV");
+        vector<uint8_t> iv = tea_generate_and_save(IV_FILE, TEA_CAPI_BLOCK_BYTES, "IV");
         if (iv.empty()) return;
 
         uint8_t* outData = nullptr;
@@ -197,14 +197,14 @@ static void mode_file(TEAModule& mod, TEAHandle handle) {
             return;
         }
 
-        if (raw.size() < headerSize + (size_t)TEA_BLOCK_BYTES) {
+        if (raw.size() < headerSize + (size_t)TEA_CAPI_BLOCK_BYTES) {
             cout << "\n  [!] Файл слишком мал или повреждён.\n";
             return;
         }
 
         vector<uint8_t> iv(raw.begin() + headerSize,
-                            raw.begin() + headerSize + TEA_BLOCK_BYTES);
-        vector<uint8_t> cipher(raw.begin() + headerSize + TEA_BLOCK_BYTES,
+                            raw.begin() + headerSize + TEA_CAPI_BLOCK_BYTES);
+        vector<uint8_t> cipher(raw.begin() + headerSize + TEA_CAPI_BLOCK_BYTES,
                                 raw.end());
 
         string outPath = tea_build_decrypt_path(originalName);
@@ -249,17 +249,17 @@ static void mode_file(TEAModule& mod, TEAHandle handle) {
 static void mode_key_gen() {
     cout << "\n  Генератор ключей TEA\n";
     cout << "  Длина ключа фиксирована: "
-         << TEA_KEY_BYTES << " байт ("
-         << TEA_KEY_BYTES * 8 << " бит)\n\n";
+         << TEA_CAPI_KEY_BYTES << " байт ("
+         << TEA_CAPI_KEY_BYTES * 8 << " бит)\n\n";
 
-    vector<uint8_t> key = tea_generate_and_save(KEY_FILE, TEA_KEY_BYTES, "КЛЮЧ");
+    vector<uint8_t> key = tea_generate_and_save(KEY_FILE, TEA_CAPI_KEY_BYTES, "КЛЮЧ");
     if (key.empty()) return;
 
     cout << "\n";
     print_sep();
     cout << "  Файл : " << KEY_FILE << "\n";
-    cout << "  Длина: " << TEA_KEY_BYTES << " байт ("
-         << TEA_KEY_BYTES * 8 << " бит)\n";
+    cout << "  Длина: " << TEA_CAPI_KEY_BYTES << " байт ("
+         << TEA_CAPI_KEY_BYTES * 8 << " бит)\n";
     print_sep();
 }
 
@@ -327,7 +327,7 @@ void runTEA() {
 
         if (!mod.setKey(handle, keyBytes.data(), keyBytes.size())) {
             cout << "\n  [!] Неверная длина ключа в файле " << KEY_FILE << "\n";
-            cout << "  TEA требует ровно " << TEA_KEY_BYTES << " байт.\n";
+            cout << "  TEA требует ровно " << TEA_CAPI_KEY_BYTES << " байт.\n";
             mod.destroy(handle);
             continue;
         }
