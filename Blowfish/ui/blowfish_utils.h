@@ -6,15 +6,6 @@
 
 // =============================================================================
 //  blowfish_utils.h — утилиты для модуля Blowfish
-<<<<<<< HEAD
-//  Конвертация HEX, работа с файлами, генерация случайных байт
-//  Не использует <filesystem> — совместимо с MinGW и старыми компиляторами
-//
-//  Всё обёрнуто в namespace BlowfishUtils, потому что app.exe линкует
-//  utils-файлы ВСЕХ шифров одновременно (TEA, Blowfish, ...), а у них
-//  совпадают имена функций (hexToBytes, readFile и т.д.) — без namespace
-//  это конфликт линковки (LNK2005 / multiple definition).
-=======
 //  Конвертация HEX, работа с файлами, генерация случайных байт.
 //
 //  Все функции имеют префикс bf_ui_ — это заменяет namespace и исключает
@@ -22,10 +13,7 @@
 //  (TEA, Blowfish и др.) в одном .exe.
 //  Префикс bf_ui_ выбран чтобы не конфликтовать с algo-функциями (bf_*)
 //  из blowfish.h.
->>>>>>> BlowTEA
 // =============================================================================
-
-namespace BlowfishUtils {
 
 // ─── HEX ─────────────────────────────────────────────────────────────────────
 
@@ -85,12 +73,6 @@ bool bf_ui_unpack_filename_header(const std::vector<uint8_t>& data,
 
 // ─── Ключи и IV ──────────────────────────────────────────────────────────────
 
-<<<<<<< HEAD
-vector<uint8_t> generateAndSave(const string& filepath, size_t byteCount, const string& label);
-vector<uint8_t> loadFromFile(const string& filepath, const string& label);
-
-} // namespace BlowfishUtils
-=======
 // Сгенерировать случайные байты, сохранить в файл и вывести HEX в консоль.
 // Возвращает сгенерированные байты или пустой вектор при ошибке.
 std::vector<uint8_t> bf_ui_generate_and_save(const std::string& filepath,
@@ -101,4 +83,3 @@ std::vector<uint8_t> bf_ui_generate_and_save(const std::string& filepath,
 // При ошибке выводит сообщение и возвращает пустой вектор.
 std::vector<uint8_t> bf_ui_load_from_file(const std::string& filepath,
                                            const std::string& label);
->>>>>>> BlowTEA

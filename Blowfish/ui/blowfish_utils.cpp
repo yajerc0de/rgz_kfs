@@ -13,13 +13,6 @@
     #include <sys/stat.h>
 #endif
 
-<<<<<<< HEAD
-using namespace std;
-
-namespace BlowfishUtils {
-
-=======
->>>>>>> BlowTEA
 // =============================================================================
 //  HEX
 // =============================================================================
@@ -213,5 +206,3 @@ std::vector<uint8_t> bf_ui_load_from_file(const std::string& filepath,
     std::cout << "  [" << label << "] HEX: " << bf_ui_bytes_to_hex(data) << "\n";
     return data;
 }
-
-} // namespace BlowfishUtils

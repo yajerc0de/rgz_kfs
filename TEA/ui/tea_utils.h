@@ -13,8 +13,6 @@
 //  (TEA, Blowfish и др.) в одном .exe.
 // =============================================================================
 
-namespace TeaUtils {
-
 // ─── HEX ─────────────────────────────────────────────────────────────────────
 
 // Конвертировать hex-строку ("a1b2c3...") в вектор байт.
@@ -80,5 +78,3 @@ std::vector<uint8_t> tea_generate_and_save(const std::string& filepath,
 // При ошибке выводит сообщение и возвращает пустой вектор.
 std::vector<uint8_t> tea_load_from_file(const std::string& filepath,
                                          const std::string& label);
-
-}

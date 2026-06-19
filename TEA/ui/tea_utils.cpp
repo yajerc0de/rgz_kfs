@@ -197,4 +197,4 @@ std::vector<uint8_t> tea_load_from_file(const std::string& filepath,
     std::cout << "  [" << label << "] Загружен из: " << filepath << "\n";
     std::cout << "  [" << label << "] HEX: " << tea_bytes_to_hex(data) << "\n";
     return data;
-} // namespace TeaUtils
+}
