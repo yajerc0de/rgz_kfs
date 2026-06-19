@@ -2,16 +2,7 @@
 
 #include <cstdint>
 #include <cstddef>
-
-#ifdef _WIN32
-#ifdef AES_BUILD_DLL
-#define AES_API __declspec(dllexport)
-#else
-#define AES_API __declspec(dllimport)
-#endif
-#else
-#define AES_API __attribute__((visibility("default")))
-#endif
+#include "../algo/aes_export.h"
 
 using namespace std;
 
