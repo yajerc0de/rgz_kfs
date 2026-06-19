@@ -273,9 +273,9 @@ void aes_run_ui()
     #ifdef _WIN32
     const string libName = "aes.dll";
     #elif defined(__APPLE__)
-    const string libName = "./libaes.dylib";
+    const string libName = "./aes.dylib";
     #else
-    const string libName = "./libaes.so";
+    const string libName = "./aes.so";
     #endif
 
     if (!aes_load(

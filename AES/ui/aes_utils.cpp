@@ -1,6 +1,5 @@
-#define AES_BUILDING_LIB
 #include "aes_utils.h"
-#include "aes_core.h"
+#include "../capi/aes_capi.h"
 
 #include <iostream>
 #include <fstream>
@@ -13,7 +12,7 @@ bool generate_and_save_key(const std::string& key_path, unsigned char* out_key) 
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> dis(0, 255);
 
-    for (int i = 0; i < BLOCK_SIZE; ++i)
+    for (int i = 0; i < AES_BLOCK_BYTES; ++i)
         out_key[i] = (unsigned char)dis(gen);
 
     std::ofstream f(key_path, std::ios::binary);
@@ -21,10 +20,10 @@ bool generate_and_save_key(const std::string& key_path, unsigned char* out_key) 
         std::cerr << "[Ошибка] Не удалось создать файл ключа: " << key_path << "\n";
         return false;
     }
-    f.write(reinterpret_cast<const char*>(out_key), BLOCK_SIZE);
+    f.write(reinterpret_cast<const char*>(out_key), AES_BLOCK_BYTES);
     f.close();
 
-    print_hex("Сгенерирован ключ (HEX)", out_key, BLOCK_SIZE);
+    print_hex("Сгенерирован ключ (HEX)", out_key, AES_BLOCK_BYTES);
     return true;
 }
 
@@ -34,8 +33,8 @@ bool load_key(const std::string& key_path, unsigned char* out_key) {
         std::cerr << "[Ошибка] Не удалось открыть файл ключа: " << key_path << "\n";
         return false;
     }
-    f.read(reinterpret_cast<char*>(out_key), BLOCK_SIZE);
-    if (f.gcount() != BLOCK_SIZE) {
+    f.read(reinterpret_cast<char*>(out_key), AES_BLOCK_BYTES);
+    if (f.gcount() != AES_BLOCK_BYTES) {
         std::cerr << "[Ошибка] Файл ключа повреждён или неполный\n";
         return false;
     }
@@ -45,7 +44,7 @@ bool load_key(const std::string& key_path, unsigned char* out_key) {
 
 void generate_iv(unsigned char* iv) {
     std::random_device rd;
-    for (int i = 0; i < BLOCK_SIZE; ++i)
+    for (int i = 0; i < AES_BLOCK_BYTES; ++i)
         iv[i] = (unsigned char)(rd() % 256);
 }
 
@@ -61,7 +60,7 @@ bool save_encrypted_file(
         return false;
     }
 
-    f.write(reinterpret_cast<const char*>(iv), BLOCK_SIZE);
+    f.write(reinterpret_cast<const char*>(iv), AES_BLOCK_BYTES);
 
     unsigned char ext_len = (unsigned char)extension.size();
     f.write(reinterpret_cast<const char*>(&ext_len), 1);
@@ -88,8 +87,8 @@ bool load_encrypted_file(
         return false;
     }
 
-    f.read(reinterpret_cast<char*>(out_iv), BLOCK_SIZE);
-    if (f.gcount() != BLOCK_SIZE) {
+    f.read(reinterpret_cast<char*>(out_iv), AES_BLOCK_BYTES);
+    if (f.gcount() != AES_BLOCK_BYTES) {
         std::cerr << "[Ошибка] Файл слишком маленький (нет IV)\n";
         return false;
     }
