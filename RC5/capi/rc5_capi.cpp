@@ -1,6 +1,4 @@
-// =============================================================================
-//  rc5_capi.cpp — реализация C-интерфейса для .dll/.so
-// =============================================================================
+
 
 #define RC5_BUILD_DLL
 #include "rc5_capi.h"
@@ -13,7 +11,7 @@
 
 using namespace std;
 
-// ── Жизненный цикл ────────────────────────────────────────────────────────────
+
 
 Rc5Handle rc5_create() {
     Rc5KeySchedule* sched = static_cast<Rc5KeySchedule*>(malloc(sizeof(Rc5KeySchedule)));
@@ -37,7 +35,7 @@ int rc5_set_key(Rc5Handle handle, const uint8_t* key, size_t keyLen) {
     return rc5SetKey(*sched, keyVec) ? 1 : 0;
 }
 
-// ── Вспомогательная функция: скопировать vector<uint8_t> в malloc-буфер ───────
+
 
 static int copyVectorToMallocBuffer(const vector<uint8_t>& src,
                                      uint8_t** outData, size_t* outLen)
@@ -55,7 +53,7 @@ static int copyVectorToMallocBuffer(const vector<uint8_t>& src,
     return 1;
 }
 
-// ── CBC-шифрование / дешифрование ───────────────────────────────────────────
+
 
 int rc5_encrypt_cbc(Rc5Handle handle,
                      const uint8_t* data, size_t dataLen,
@@ -103,7 +101,7 @@ int rc5_decrypt_cbc(Rc5Handle handle,
 
         return copyVectorToMallocBuffer(plain, outData, outLen);
     } catch (...) {
-        // Сюда попадаем при неверном ключе, повреждённом паддинге и т.п.
+       
         return 0;
     }
 }

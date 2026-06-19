@@ -7,18 +7,12 @@
 
 using namespace std;
 
-// =============================================================================
-//  rc5_ui.cpp — консольный интерфейс модуля RC5
-//
-//  ВАЖНО: этот файл НЕ знает о внутреннем устройстве RC5. Вся работа с шифром
-//  идёт через структуру Rc5Module (поля — указатели на функции из библиотеки)
-//  и свободные функции rc5ModuleLoad/rc5ModuleIsReady (см. rc5_module_api.h).
-// =============================================================================
+
 
 static const string KEY_FILE = "rc5_key.bin";
 static const string IV_FILE  = "rc5_iv.bin";
 
-// Путь к динамической библиотеке. Расширение разное для разных платформ.
+
 #ifdef _WIN32
 static const string LIB_PATH = "rc5.dll";
 #else
@@ -29,9 +23,7 @@ static void printSep(char ch = '-', int w = 50) {
     cout << string(w, ch) << "\n";
 }
 
-// =============================================================================
-//  Режим 1: шифрование / дешифрование текста
-// =============================================================================
+
 
 static void modeText(Rc5Module& mod, Rc5Handle handle) {
     cout << "\n  Текстовый режим:\n";
@@ -117,9 +109,7 @@ static void modeText(Rc5Module& mod, Rc5Handle handle) {
     }
 }
 
-// =============================================================================
-//  Режим 2: шифрование / дешифрование файла
-// =============================================================================
+
 
 static void modeFile(Rc5Module& mod, Rc5Handle handle) {
     cout << "\n  Файловый режим:\n";
@@ -132,7 +122,7 @@ static void modeFile(Rc5Module& mod, Rc5Handle handle) {
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
     if (choice == 1) {
-        // ── Шифрование ────────────────────────────────────────────────────────
+       
         cout << "\n  Путь к исходному файлу: ";
         string inPath;
         getline(cin, inPath);
@@ -140,7 +130,7 @@ static void modeFile(Rc5Module& mod, Rc5Handle handle) {
         vector<uint8_t> plain;
         if (!readFile(inPath, plain)) return;
 
-        // Выходной файл всегда .bin — оригинальное имя хранится внутри
+        
         string outPath = buildEncryptPath(inPath);
 
         vector<uint8_t> iv = generateAndSave(IV_FILE, RC5_BLOCK_BYTES, "IV");
@@ -160,11 +150,11 @@ static void modeFile(Rc5Module& mod, Rc5Handle handle) {
         vector<uint8_t> cipher(outData, outData + outLen);
         mod.freeBuffer(outData);
 
-        // Заголовок с оригинальным именем файла (например "document.pdf")
+        
         string originalName = extractFilename(inPath);
         vector<uint8_t> nameHeader = packFilenameHeader(originalName);
 
-        // Формат файла: [заголовок имени][8 байт IV][шифротекст]
+        
         vector<uint8_t> output;
         output.insert(output.end(), nameHeader.begin(), nameHeader.end());
         output.insert(output.end(), iv.begin(),         iv.end());
@@ -184,7 +174,7 @@ static void modeFile(Rc5Module& mod, Rc5Handle handle) {
         printSep();
 
     } else if (choice == 2) {
-        // ── Дешифрование ──────────────────────────────────────────────────────
+        
         cout << "\n  Путь к зашифрованному файлу: ";
         string inPath;
         getline(cin, inPath);
@@ -192,7 +182,7 @@ static void modeFile(Rc5Module& mod, Rc5Handle handle) {
         vector<uint8_t> raw;
         if (!readFile(inPath, raw)) return;
 
-        // Извлекаем заголовок с оригинальным именем
+        
         string originalName;
         size_t headerSize = 0;
         if (!unpackFilenameHeader(raw, originalName, headerSize)) {
@@ -201,7 +191,7 @@ static void modeFile(Rc5Module& mod, Rc5Handle handle) {
             return;
         }
 
-        // После заголовка идёт IV (8 байт), затем шифротекст
+        
         if (raw.size() < headerSize + static_cast<size_t>(RC5_BLOCK_BYTES * 2)) {
             cout << "\n  [!] Файл слишком мал или повреждён.\n";
             return;
@@ -212,7 +202,7 @@ static void modeFile(Rc5Module& mod, Rc5Handle handle) {
         vector<uint8_t> cipher(raw.begin() + headerSize + RC5_BLOCK_BYTES,
                                 raw.end());
 
-        // Путь назначения строится из оригинального имени, извлечённого из файла
+        
         string outPath = buildDecryptPath(originalName);
 
         cout << "  [ИМЯ] Восстановлено из метаданных: " << originalName << "\n";
@@ -248,10 +238,7 @@ static void modeFile(Rc5Module& mod, Rc5Handle handle) {
     }
 }
 
-// =============================================================================
-//  Режим 3: генератор ключей
-//  RC5 поддерживает ключи 1–255 байт; по умолчанию генерируем 16 байт (128 бит)
-// =============================================================================
+
 
 static void modeKeyGen() {
     cout << "\n  Генератор ключей RC5\n";
@@ -285,9 +272,7 @@ static void modeKeyGen() {
     printSep();
 }
 
-// =============================================================================
-//  runRC5() — точка входа из main.cpp
-// =============================================================================
+
 
 void runRC5() {
     cout << "\n";
@@ -335,7 +320,7 @@ void runRC5() {
             continue;
         }
 
-        // Загружаем ключ из файла
+        
         vector<uint8_t> keyBytes = loadFromFile(KEY_FILE, "КЛЮЧ");
         if (keyBytes.empty()) {
             cout << "\n  [!] Файл ключа не найден: " << KEY_FILE << "\n";
@@ -343,7 +328,7 @@ void runRC5() {
             continue;
         }
 
-        // Создаём ключевое расписание через библиотеку (handle — непрозрачный указатель)
+        
         Rc5Handle handle = mod.create();
         if (handle == nullptr) {
             cout << "\n  [!] Не удалось создать объект RC5 в библиотеке.\n";
@@ -361,7 +346,7 @@ void runRC5() {
         if (choice == 1) modeText(mod, handle);
         else             modeFile(mod, handle);
 
-        // Освобождаем ключевое расписание после использования
+       
         mod.destroy(handle);
     }
 }

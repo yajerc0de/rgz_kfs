@@ -8,17 +8,15 @@
 #include <algorithm>
 
 #ifdef _WIN32
-    #include <direct.h>   // _mkdir
-    #include <sys/stat.h> // stat
+    #include <direct.h>   
+    #include <sys/stat.h> 
 #else
-    #include <sys/stat.h> // mkdir, stat
+    #include <sys/stat.h> 
 #endif
 
 using namespace std;
 
-// =============================================================================
-//  HEX
-// =============================================================================
+
 
 bool hexToBytes(const string& hex, vector<uint8_t>& out) {
     if (hex.size() % 2 != 0) return false;
@@ -40,9 +38,7 @@ string bytesToHex(const vector<uint8_t>& data) {
     return oss.str();
 }
 
-// =============================================================================
-//  Случайные байты
-// =============================================================================
+
 
 vector<uint8_t> randomBytes(size_t count) {
     random_device rd;
@@ -55,9 +51,7 @@ vector<uint8_t> randomBytes(size_t count) {
     return result;
 }
 
-// =============================================================================
-//  Файлы
-// =============================================================================
+
 
 bool readFile(const string& path, vector<uint8_t>& data) {
     ifstream f(path, ios::binary);
@@ -101,9 +95,7 @@ bool ensureDir(const string& dirPath) {
     return false;
 }
 
-// =============================================================================
-//  Работа с путями — без filesystem, только строковые операции
-// =============================================================================
+
 
 string extractFilename(const string& path) {
     // Ищем последний слеш (прямой или обратный для Windows)
@@ -117,8 +109,7 @@ string buildEncryptPath(const string& sourcePath) {
     const string dir = "Encryptfiles";
     ensureDir(dir);
 
-    // Берём имя файла без расширения, добавляем .bin
-    // Оригинальное расширение хранится внутри файла, а не в имени на диске
+    
     string filename = extractFilename(sourcePath);
 
     size_t dotPos = filename.find_last_of('.');
@@ -131,16 +122,11 @@ string buildDecryptPath(const string& originalName) {
     const string dir = "Decryptfiles";
     ensureDir(dir);
 
-    // originalName уже извлечён из метаданных внутри .bin файла —
-    // здесь просто собираем путь, без дополнительной обработки имени
+   
     return dir + "/" + "decrypted_" + originalName;
 }
 
-// =============================================================================
-//  Метаданные имени файла
-//
-//  Формат: [4 байта длина имени, little-endian][N байт имя файла UTF-8]
-// =============================================================================
+
 
 vector<uint8_t> packFilenameHeader(const string& originalFilename) {
     uint32_t nameLen = static_cast<uint32_t>(originalFilename.size());
@@ -148,13 +134,13 @@ vector<uint8_t> packFilenameHeader(const string& originalFilename) {
     vector<uint8_t> header;
     header.reserve(4 + nameLen);
 
-    // Длина имени — 4 байта little-endian
+    
     header.push_back(static_cast<uint8_t>( nameLen        & 0xFF));
     header.push_back(static_cast<uint8_t>((nameLen >> 8)  & 0xFF));
     header.push_back(static_cast<uint8_t>((nameLen >> 16) & 0xFF));
     header.push_back(static_cast<uint8_t>((nameLen >> 24) & 0xFF));
 
-    // Само имя файла
+    
     header.insert(header.end(), originalFilename.begin(), originalFilename.end());
 
     return header;
@@ -172,7 +158,7 @@ bool unpackFilenameHeader(const vector<uint8_t>& data,
                       | (static_cast<uint32_t>(data[2]) << 16)
                       | (static_cast<uint32_t>(data[3]) << 24);
 
-    // Защита от повреждённых данных — разумный верхний предел длины имени
+   
     const uint32_t MAX_NAME_LEN = 4096;
     if (nameLen == 0 || nameLen > MAX_NAME_LEN)
         return false;
@@ -185,9 +171,7 @@ bool unpackFilenameHeader(const vector<uint8_t>& data,
     return true;
 }
 
-// =============================================================================
-//  Ключи и IV
-// =============================================================================
+
 
 vector<uint8_t> generateAndSave(const string& filepath, size_t byteCount, const string& label) {
     vector<uint8_t> data = randomBytes(byteCount);

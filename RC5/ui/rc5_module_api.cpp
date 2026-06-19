@@ -2,10 +2,7 @@
 
 using namespace std;
 
-// =============================================================================
-//  Вспомогательная функция: достать один символ и привести к нужному типу.
-//  Заполняет mod.lastError и возвращает false если символ не найден.
-// =============================================================================
+
 
 template <typename FnPtr>
 static bool rc5BindSymbol(Rc5Module& mod, const string& name, FnPtr& target) {
@@ -18,9 +15,7 @@ static bool rc5BindSymbol(Rc5Module& mod, const string& name, FnPtr& target) {
     return true;
 }
 
-// =============================================================================
-//  rc5ModuleLoad — загрузить библиотеку и связать все функции
-// =============================================================================
+
 
 bool rc5ModuleLoad(Rc5Module& mod, const string& libPath) {
     if (!mod.lib.load(libPath)) {
@@ -28,8 +23,7 @@ bool rc5ModuleLoad(Rc5Module& mod, const string& libPath) {
         return false;
     }
 
-    // Привязываем каждый символ. Если хотя бы один не найден — библиотека
-    // считается несовместимой (например собрана от другой версии rc5_capi.h).
+    
     bool ok = true;
     ok = ok && rc5BindSymbol(mod, "rc5_create",      mod.create);
     ok = ok && rc5BindSymbol(mod, "rc5_destroy",     mod.destroy);
