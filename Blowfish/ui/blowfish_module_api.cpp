@@ -1,40 +1,55 @@
 #include "blowfish_module_api.h"
 
-using namespace std;
-
 // =============================================================================
-//  load — загрузить библиотеку и связать все функции
+//  blowfish_load — загрузить библиотеку и привязать все символы
 // =============================================================================
 
-bool BlowfishModule::load(const string& libPath) {
-    if (!m_lib.load(libPath)) {
-        m_lastError = "Не удалось загрузить библиотеку: " + m_lib.lastError();
+bool blowfish_load(BlowfishModule* module, const std::string& path) {
+    if (module == nullptr)
+        return false;
+
+    if (!module->library.load(path)) {
+        module->lastError = module->library.lastError();
         return false;
     }
 
-    // Привязываем каждый символ. Если хотя бы один не найден — библиотека
-    // считается несовместимой (например собрана от другой версии capi-заголовка).
     bool ok = true;
-    ok = ok && bindSymbol("blowfish_create",       create);
-    ok = ok && bindSymbol("blowfish_destroy",      destroy);
-    ok = ok && bindSymbol("blowfish_set_key",      setKey);
-    ok = ok && bindSymbol("blowfish_encrypt_cbc",  encryptCbc);
-    ok = ok && bindSymbol("blowfish_decrypt_cbc",  decryptCbc);
-    ok = ok && bindSymbol("blowfish_free_buffer",  freeBuffer);
+
+    ok = ok && blowfish_bind_symbol(module, "blowfish_create",      module->create);
+    ok = ok && blowfish_bind_symbol(module, "blowfish_destroy",     module->destroy);
+    ok = ok && blowfish_bind_symbol(module, "blowfish_set_key",     module->setKey);
+    ok = ok && blowfish_bind_symbol(module, "blowfish_encrypt_cbc", module->encryptCbc);
+    ok = ok && blowfish_bind_symbol(module, "blowfish_decrypt_cbc", module->decryptCbc);
+    ok = ok && blowfish_bind_symbol(module, "blowfish_free_buffer", module->freeBuffer);
 
     if (!ok) {
-        m_lib.unload();
+        module->library.unload();
         return false;
     }
 
     return true;
 }
 
-bool BlowfishModule::isReady() const {
-    return create != nullptr && destroy != nullptr && setKey != nullptr
-        && encryptCbc != nullptr && decryptCbc != nullptr && freeBuffer != nullptr;
+// =============================================================================
+//  blowfish_is_ready — все указатели заполнены
+// =============================================================================
+
+bool blowfish_is_ready(const BlowfishModule* module) {
+    if (module == nullptr)
+        return false;
+
+    return module->create     != nullptr &&
+           module->destroy    != nullptr &&
+           module->setKey     != nullptr &&
+           module->encryptCbc != nullptr &&
+           module->decryptCbc != nullptr &&
+           module->freeBuffer != nullptr;
 }
 
-const string& BlowfishModule::lastError() const {
-    return m_lastError;
+// =============================================================================
+//  blowfish_last_error — текст последней ошибки
+// =============================================================================
+
+const std::string& blowfish_last_error(const BlowfishModule* module) {
+    return module->lastError;
 }

@@ -1,50 +1,24 @@
-// =============================================================================
-//  tea_capi.cpp — реализация C-интерфейса для .dll/.so
-//
-//  TEA_BUILD_DLL определён только при компиляции этой библиотеки —
-//  это активирует __declspec(dllexport) в tea_capi.h (см. условие там).
-// =============================================================================
-
-#define TEA_BUILD_DLL
 #include "tea_capi.h"
 #include "../algo/tea.h"
 
 #include <cstdlib>
 #include <cstring>
 #include <vector>
-#include <stdexcept>
 
-using namespace std;
+// =============================================================================
+//  Внутренний контекст — не виден снаружи библиотеки.
+// =============================================================================
 
-// ── Жизненный цикл ────────────────────────────────────────────────────────────
+struct TEAContext {
+    TeaKey key;
+};
 
-TeaHandle tea_create() {
-    try {
-        return static_cast<TeaHandle>(new TEA());
-    } catch (...) {
-        return nullptr;
-    }
-}
+// =============================================================================
+//  Вспомогательная функция: скопировать vector<uint8_t> в malloc-буфер.
+// =============================================================================
 
-void tea_destroy(TeaHandle handle) {
-    if (handle == nullptr) return;
-    delete static_cast<TEA*>(handle);
-}
-
-int tea_set_key(TeaHandle handle, const uint8_t* key, size_t keyLen) {
-    if (handle == nullptr || key == nullptr) return 0;
-
-    TEA* tea = static_cast<TEA*>(handle);
-    vector<uint8_t> keyVec(key, key + keyLen);
-
-    return tea->setKey(keyVec) ? 1 : 0;
-}
-
-// ── Вспомогательная функция: скопировать vector<uint8_t> в malloc-буфер ───────
-// Используется и для encrypt, и для decrypt, чтобы не дублировать код.
-
-static int copyVectorToMallocBuffer(const vector<uint8_t>& src,
-                                     uint8_t** outData, size_t* outLen)
+static int copy_vector_to_malloc_buffer(const std::vector<uint8_t>& src,
+                                         uint8_t** outData, size_t* outLen)
 {
     uint8_t* buffer = static_cast<uint8_t*>(malloc(src.size()));
     if (buffer == nullptr) {
@@ -52,68 +26,77 @@ static int copyVectorToMallocBuffer(const vector<uint8_t>& src,
         *outLen  = 0;
         return 0;
     }
-
     memcpy(buffer, src.data(), src.size());
     *outData = buffer;
     *outLen  = src.size();
     return 1;
 }
 
-// ── CBC-шифрование / дешифрование ───────────────────────────────────────────
+// =============================================================================
+//  Жизненный цикл
+// =============================================================================
 
-int tea_encrypt_cbc(TeaHandle handle,
-                     const uint8_t* data, size_t dataLen,
-                     const uint8_t* iv,
-                     uint8_t** outData, size_t* outLen)
-{
-    if (handle == nullptr || iv == nullptr || outData == nullptr || outLen == nullptr)
-        return 0;
-
-    *outData = nullptr;
-    *outLen  = 0;
-
-    TEA* tea = static_cast<TEA*>(handle);
-
-    try {
-        vector<uint8_t> plain(data, data + dataLen);
-        vector<uint8_t> ivVec(iv, iv + TEA_BLOCK_BYTES);
-
-        vector<uint8_t> cipher = tea->encryptCBC(plain, ivVec);
-
-        return copyVectorToMallocBuffer(cipher, outData, outLen);
-    } catch (...) {
-        return 0;
-    }
+TEAHandle tea_create() {
+    TEAContext* ctx = (TEAContext*)malloc(sizeof(TEAContext));
+    if (ctx == nullptr) return nullptr;
+    tea_key_init(&ctx->key);
+    return ctx;
 }
 
-int tea_decrypt_cbc(TeaHandle handle,
-                     const uint8_t* data, size_t dataLen,
-                     const uint8_t* iv,
-                     uint8_t** outData, size_t* outLen)
+void tea_destroy(TEAHandle handle) {
+    if (handle == nullptr) return;
+    free(handle);
+}
+
+int tea_set_key(TEAHandle handle, const uint8_t* key, size_t keyLen) {
+    if (handle == nullptr) return 0;
+    if (key    == nullptr) return 0;
+    if (keyLen != TEA_CAPI_KEY_BYTES) return 0;
+
+    TEAContext* ctx = static_cast<TEAContext*>(handle);
+    return tea_key_set(&ctx->key, key, (int)keyLen) ? 1 : 0;
+}
+
+// =============================================================================
+//  CBC-шифрование / дешифрование
+// =============================================================================
+
+int tea_encrypt_cbc(TEAHandle handle,
+                    const uint8_t* data, size_t dataLen,
+                    const uint8_t* iv,
+                    uint8_t** outData, size_t* outLen)
 {
-    if (handle == nullptr || iv == nullptr || outData == nullptr || outLen == nullptr)
-        return 0;
+    if (handle == nullptr || data == nullptr || iv == nullptr
+     || outData == nullptr || outLen == nullptr) return 0;
 
     *outData = nullptr;
     *outLen  = 0;
 
-    TEA* tea = static_cast<TEA*>(handle);
+    TEAContext* ctx = static_cast<TEAContext*>(handle);
+    std::vector<uint8_t> plain(data, data + dataLen);
+    std::vector<uint8_t> cipher = tea_cbc_encrypt(&ctx->key, plain, iv);
+    if (cipher.empty()) return 0;
+    return copy_vector_to_malloc_buffer(cipher, outData, outLen);
+}
 
-    try {
-        vector<uint8_t> cipher(data, data + dataLen);
-        vector<uint8_t> ivVec(iv, iv + TEA_BLOCK_BYTES);
+int tea_decrypt_cbc(TEAHandle handle,
+                    const uint8_t* data, size_t dataLen,
+                    const uint8_t* iv,
+                    uint8_t** outData, size_t* outLen)
+{
+    if (handle == nullptr || data == nullptr || iv == nullptr
+     || outData == nullptr || outLen == nullptr) return 0;
 
-        vector<uint8_t> plain = tea->decryptCBC(cipher, ivVec);
+    *outData = nullptr;
+    *outLen  = 0;
 
-        return copyVectorToMallocBuffer(plain, outData, outLen);
-    } catch (...) {
-        // Сюда попадаем при неверном ключе, повреждённом паддинге и т.п.
-        return 0;
-    }
+    TEAContext* ctx = static_cast<TEAContext*>(handle);
+    std::vector<uint8_t> cipher(data, data + dataLen);
+    std::vector<uint8_t> plain = tea_cbc_decrypt(&ctx->key, cipher, iv);
+    if (plain.empty() && dataLen > 0) return 0;
+    return copy_vector_to_malloc_buffer(plain, outData, outLen);
 }
 
 void tea_free_buffer(uint8_t* buffer) {
-    if (buffer != nullptr) {
-        free(buffer);
-    }
+    if (buffer != nullptr) free(buffer);
 }

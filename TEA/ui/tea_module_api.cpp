@@ -1,40 +1,55 @@
 #include "tea_module_api.h"
 
-using namespace std;
-
 // =============================================================================
-//  load — загрузить библиотеку и связать все функции
+//  tea_load — загрузить библиотеку и привязать все символы
 // =============================================================================
 
-bool TeaModule::load(const string& libPath) {
-    if (!m_lib.load(libPath)) {
-        m_lastError = "Не удалось загрузить библиотеку: " + m_lib.lastError();
+bool tea_load(TEAModule* module, const std::string& path) {
+    if (module == nullptr)
+        return false;
+
+    if (!module->library.load(path)) {
+        module->lastError = module->library.lastError();
         return false;
     }
 
-    // Привязываем каждый символ. Если хотя бы один не найден — библиотека
-    // считается несовместимой (например собрана от другой версии tea_capi.h).
     bool ok = true;
-    ok = ok && bindSymbol("tea_create",       create);
-    ok = ok && bindSymbol("tea_destroy",      destroy);
-    ok = ok && bindSymbol("tea_set_key",      setKey);
-    ok = ok && bindSymbol("tea_encrypt_cbc",  encryptCbc);
-    ok = ok && bindSymbol("tea_decrypt_cbc",  decryptCbc);
-    ok = ok && bindSymbol("tea_free_buffer",  freeBuffer);
+
+    ok = ok && tea_bind_symbol(module, "tea_create",      module->create);
+    ok = ok && tea_bind_symbol(module, "tea_destroy",     module->destroy);
+    ok = ok && tea_bind_symbol(module, "tea_set_key",     module->setKey);
+    ok = ok && tea_bind_symbol(module, "tea_encrypt_cbc", module->encryptCbc);
+    ok = ok && tea_bind_symbol(module, "tea_decrypt_cbc", module->decryptCbc);
+    ok = ok && tea_bind_symbol(module, "tea_free_buffer", module->freeBuffer);
 
     if (!ok) {
-        m_lib.unload();
+        module->library.unload();
         return false;
     }
 
     return true;
 }
 
-bool TeaModule::isReady() const {
-    return create != nullptr && destroy != nullptr && setKey != nullptr
-        && encryptCbc != nullptr && decryptCbc != nullptr && freeBuffer != nullptr;
+// =============================================================================
+//  tea_is_ready — все указатели заполнены
+// =============================================================================
+
+bool tea_is_ready(const TEAModule* module) {
+    if (module == nullptr)
+        return false;
+
+    return module->create     != nullptr &&
+           module->destroy    != nullptr &&
+           module->setKey     != nullptr &&
+           module->encryptCbc != nullptr &&
+           module->decryptCbc != nullptr &&
+           module->freeBuffer != nullptr;
 }
 
-const string& TeaModule::lastError() const {
-    return m_lastError;
+// =============================================================================
+//  tea_last_error — текст последней ошибки
+// =============================================================================
+
+const std::string& tea_last_error(const TEAModule* module) {
+    return module->lastError;
 }

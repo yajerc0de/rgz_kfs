@@ -12,29 +12,30 @@ using namespace BlowfishUtils; // hexToBytes, bytesToHex, readFile, writeFile и
 // =============================================================================
 //  blowfish_ui.cpp — консольный интерфейс модуля Blowfish
 //
-//  ВАЖНО: этот файл НЕ знает о классе Blowfish напрямую. Вся работа с шифром
-//  идёт через BlowfishModule — обёртку, которая грузит blowfish.dll/.so
-//  в рантайме и вызывает функции через указатели
+//  ВАЖНО: этот файл НЕ знает о структуре BFKey напрямую. Вся работа с
+//  шифром идёт через BlowfishModule — struct с указателями на функции,
+//  который грузит blowfish.dll/blowfish.so в рантайме
 //  (см. blowfish_module_api.h, blowfish_capi.h).
 // =============================================================================
 
 static const string KEY_FILE = "blowfish_key.bin";
 static const string IV_FILE  = "blowfish_iv.bin";
 
-// Путь к динамической библиотеке. Расширение разное для разных платформ.
 #ifdef _WIN32
 static const string LIB_PATH = "blowfish.dll";
 #else
 static const string LIB_PATH = "./blowfish.so";
 #endif
 
-static void printSep(char ch = '-', int w = 50) {
+static void print_sep(char ch = '-', int w = 50) {
     cout << string(w, ch) << "\n";
 }
 
-// Считать ключ от пользователя в HEX-формате, вернуть байты.
-// Возвращает false если формат или длина некорректны.
-static bool inputKey(vector<uint8_t>& keyBytes) {
+// =============================================================================
+//  input_key — считать ключ от пользователя в HEX-формате
+// =============================================================================
+
+static bool input_key(vector<uint8_t>& keyBytes) {
     cout << "\n  Введите ключ в HEX-формате\n";
     cout << "  (от 8 до 112 символов, т.е. 4-56 байт)\n";
     cout << "  Ключ: ";
@@ -45,7 +46,7 @@ static bool inputKey(vector<uint8_t>& keyBytes) {
 
     transform(hexKey.begin(), hexKey.end(), hexKey.begin(), ::tolower);
 
-    if (!hexToBytes(hexKey, keyBytes)) {
+    if (!bf_ui_hex_to_bytes(hexKey, keyBytes)) {
         cout << "\n  [!] Неверный HEX-формат ключа.\n";
         return false;
     }
@@ -62,7 +63,7 @@ static bool inputKey(vector<uint8_t>& keyBytes) {
 //  Режим 1: шифрование / дешифрование текста
 // =============================================================================
 
-static void modeText(BlowfishModule& mod, BlowfishHandle handle) {
+static void mode_text(BlowfishModule& mod, BlowfishHandle handle) {
     cout << "\n  Текстовый режим:\n";
     cout << "    1. Зашифровать текст\n";
     cout << "    2. Расшифровать текст\n";
@@ -77,7 +78,7 @@ static void modeText(BlowfishModule& mod, BlowfishHandle handle) {
         string text;
         getline(cin, text);
 
-        vector<uint8_t> iv = generateAndSave(IV_FILE, BLOWFISH_BLOCK_BYTES, "IV");
+        vector<uint8_t> iv = bf_ui_generate_and_save(IV_FILE, BLOWFISH_BLOCK_BYTES, "IV");
         if (iv.empty()) return;
 
         vector<uint8_t> plain(text.begin(), text.end());
@@ -86,7 +87,7 @@ static void modeText(BlowfishModule& mod, BlowfishHandle handle) {
         size_t   outLen  = 0;
 
         int ok = mod.encryptCbc(handle, plain.data(), plain.size(),
-                                 iv.data(), &outData, &outLen);
+                                iv.data(), &outData, &outLen);
 
         if (!ok) {
             cout << "\n  [!] Ошибка шифрования.\n";
@@ -94,14 +95,14 @@ static void modeText(BlowfishModule& mod, BlowfishHandle handle) {
         }
 
         vector<uint8_t> cipher(outData, outData + outLen);
-        mod.freeBuffer(outData); // обязательно освобождаем буфер из библиотеки
+        mod.freeBuffer(outData);
 
         cout << "\n";
-        printSep();
-        cout << "  Шифротекст (HEX): " << bytesToHex(cipher) << "\n";
+        print_sep();
+        cout << "  Шифротекст (HEX): " << bf_ui_bytes_to_hex(cipher) << "\n";
         cout << "  IV сохранён в   : " << IV_FILE  << "\n";
         cout << "  Ключ сохранён в : " << KEY_FILE << "\n";
-        printSep();
+        print_sep();
 
     } else if (choice == 2) {
         cout << "\n  Введите шифротекст (HEX): ";
@@ -109,14 +110,14 @@ static void modeText(BlowfishModule& mod, BlowfishHandle handle) {
         cin >> hexCipher;
         cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
-        vector<uint8_t> iv = loadFromFile(IV_FILE, "IV");
+        vector<uint8_t> iv = bf_ui_load_from_file(IV_FILE, "IV");
         if (iv.empty() || iv.size() != BLOWFISH_BLOCK_BYTES) {
             cout << "\n  [!] Неверный IV в файле " << IV_FILE << "\n";
             return;
         }
 
         vector<uint8_t> cipher;
-        if (!hexToBytes(hexCipher, cipher)) {
+        if (!bf_ui_hex_to_bytes(hexCipher, cipher)) {
             cout << "\n  [!] Неверный формат шифротекста.\n";
             return;
         }
@@ -125,7 +126,7 @@ static void modeText(BlowfishModule& mod, BlowfishHandle handle) {
         size_t   outLen  = 0;
 
         int ok = mod.decryptCbc(handle, cipher.data(), cipher.size(),
-                                 iv.data(), &outData, &outLen);
+                                iv.data(), &outData, &outLen);
 
         if (!ok) {
             cout << "\n  [!] Ошибка расшифровки.\n";
@@ -137,9 +138,9 @@ static void modeText(BlowfishModule& mod, BlowfishHandle handle) {
         mod.freeBuffer(outData);
 
         cout << "\n";
-        printSep();
+        print_sep();
         cout << "  Результат: " << string(plain.begin(), plain.end()) << "\n";
-        printSep();
+        print_sep();
 
     } else {
         cout << "\n  [!] Неверный выбор.\n";
@@ -150,7 +151,7 @@ static void modeText(BlowfishModule& mod, BlowfishHandle handle) {
 //  Режим 2: шифрование / дешифрование файла
 // =============================================================================
 
-static void modeFile(BlowfishModule& mod, BlowfishHandle handle) {
+static void mode_file(BlowfishModule& mod, BlowfishHandle handle) {
     cout << "\n  Файловый режим:\n";
     cout << "    1. Зашифровать файл\n";
     cout << "    2. Расшифровать файл\n";
@@ -167,19 +168,18 @@ static void modeFile(BlowfishModule& mod, BlowfishHandle handle) {
         getline(cin, inPath);
 
         vector<uint8_t> plain;
-        if (!readFile(inPath, plain)) return;
+        if (!bf_ui_read_file(inPath, plain)) return;
 
-        // Выходной файл всегда .bin — оригинальное имя хранится внутри
-        string outPath = buildEncryptPath(inPath);
+        string outPath = bf_ui_build_encrypt_path(inPath);
 
-        vector<uint8_t> iv = generateAndSave(IV_FILE, BLOWFISH_BLOCK_BYTES, "IV");
+        vector<uint8_t> iv = bf_ui_generate_and_save(IV_FILE, BLOWFISH_BLOCK_BYTES, "IV");
         if (iv.empty()) return;
 
         uint8_t* outData = nullptr;
         size_t   outLen  = 0;
 
         int ok = mod.encryptCbc(handle, plain.data(), plain.size(),
-                                 iv.data(), &outData, &outLen);
+                                iv.data(), &outData, &outLen);
 
         if (!ok) {
             cout << "\n  [!] Ошибка шифрования файла.\n";
@@ -189,20 +189,19 @@ static void modeFile(BlowfishModule& mod, BlowfishHandle handle) {
         vector<uint8_t> cipher(outData, outData + outLen);
         mod.freeBuffer(outData);
 
-        // Заголовок с оригинальным именем файла (например "2.jpg")
-        string originalName = extractFilename(inPath);
-        vector<uint8_t> nameHeader = packFilenameHeader(originalName);
-
         // Формат файла: [заголовок имени][8 байт IV][шифротекст]
+        string originalName = bf_ui_extract_filename(inPath);
+        vector<uint8_t> nameHeader = bf_ui_pack_filename_header(originalName);
+
         vector<uint8_t> output;
         output.insert(output.end(), nameHeader.begin(), nameHeader.end());
         output.insert(output.end(), iv.begin(),         iv.end());
         output.insert(output.end(), cipher.begin(),     cipher.end());
 
-        if (!writeFile(outPath, output)) return;
+        if (!bf_ui_write_file(outPath, output)) return;
 
         cout << "\n";
-        printSep();
+        print_sep();
         cout << "  Исходный файл     : " << inPath        << "\n";
         cout << "  Оригинальное имя  : " << originalName  << " (сохранено внутри .bin)\n";
         cout << "  Зашифрован в      : " << outPath       << "\n";
@@ -210,7 +209,7 @@ static void modeFile(BlowfishModule& mod, BlowfishHandle handle) {
         cout << "  Итоговый размер   : " << output.size() << " байт\n";
         cout << "  Ключ сохранён в   : " << KEY_FILE      << "\n";
         cout << "  IV сохранён в     : " << IV_FILE       << "\n";
-        printSep();
+        print_sep();
 
     } else if (choice == 2) {
         // ── Дешифрование ──────────────────────────────────────────────────────
@@ -219,19 +218,17 @@ static void modeFile(BlowfishModule& mod, BlowfishHandle handle) {
         getline(cin, inPath);
 
         vector<uint8_t> raw;
-        if (!readFile(inPath, raw)) return;
+        if (!bf_ui_read_file(inPath, raw)) return;
 
-        // Извлекаем заголовок с оригинальным именем
         string originalName;
         size_t headerSize = 0;
-        if (!unpackFilenameHeader(raw, originalName, headerSize)) {
+        if (!bf_ui_unpack_filename_header(raw, originalName, headerSize)) {
             cout << "\n  [!] Не удалось прочитать имя файла из метаданных.\n";
             cout << "  Файл повреждён или не был зашифрован этой программой.\n";
             return;
         }
 
-        // После заголовка идёт IV (8 байт), затем шифротекст
-        if (raw.size() < headerSize + static_cast<size_t>(BLOWFISH_BLOCK_BYTES * 2)) {
+        if (raw.size() < headerSize + (size_t)BLOWFISH_BLOCK_BYTES) {
             cout << "\n  [!] Файл слишком мал или повреждён.\n";
             return;
         }
@@ -241,18 +238,17 @@ static void modeFile(BlowfishModule& mod, BlowfishHandle handle) {
         vector<uint8_t> cipher(raw.begin() + headerSize + BLOWFISH_BLOCK_BYTES,
                                 raw.end());
 
-        // Путь назначения строится из оригинального имени, извлечённого из файла
-        string outPath = buildDecryptPath(originalName);
+        string outPath = bf_ui_build_decrypt_path(originalName);
 
         cout << "  [ИМЯ] Восстановлено из метаданных: " << originalName << "\n";
         cout << "  [IV]  Извлечён из файла\n";
-        cout << "  [IV]  HEX: " << bytesToHex(iv) << "\n";
+        cout << "  [IV]  HEX: " << bf_ui_bytes_to_hex(iv) << "\n";
 
         uint8_t* outData = nullptr;
         size_t   outLen  = 0;
 
         int ok = mod.decryptCbc(handle, cipher.data(), cipher.size(),
-                                 iv.data(), &outData, &outLen);
+                                iv.data(), &outData, &outLen);
 
         if (!ok) {
             cout << "\n  [!] Ошибка расшифровки файла.\n";
@@ -263,14 +259,14 @@ static void modeFile(BlowfishModule& mod, BlowfishHandle handle) {
         vector<uint8_t> plain(outData, outData + outLen);
         mod.freeBuffer(outData);
 
-        if (!writeFile(outPath, plain)) return;
+        if (!bf_ui_write_file(outPath, plain)) return;
 
         cout << "\n";
-        printSep();
-        cout << "  Зашифрованный файл: " << inPath       << "\n";
-        cout << "  Расшифрован в     : " << outPath       << "\n";
-        cout << "  Размер данных     : " << plain.size()  << " байт\n";
-        printSep();
+        print_sep();
+        cout << "  Зашифрованный файл: " << inPath      << "\n";
+        cout << "  Расшифрован в     : " << outPath     << "\n";
+        cout << "  Размер данных     : " << plain.size() << " байт\n";
+        print_sep();
 
     } else {
         cout << "\n  [!] Неверный выбор.\n";
@@ -282,7 +278,7 @@ static void modeFile(BlowfishModule& mod, BlowfishHandle handle) {
 //  У Blowfish длина ключа переменная — пользователь выбирает сам
 // =============================================================================
 
-static void modeKeyGen() {
+static void mode_key_gen() {
     cout << "\n  Генератор ключей Blowfish\n";
     cout << "  Введите желаемую длину ключа в байтах ("
          << BLOWFISH_KEY_MIN << "-" << BLOWFISH_KEY_MAX << "): ";
@@ -296,14 +292,14 @@ static void modeKeyGen() {
         len = 32;
     }
 
-    vector<uint8_t> key = generateAndSave(KEY_FILE, static_cast<size_t>(len), "КЛЮЧ");
+    vector<uint8_t> key = bf_ui_generate_and_save(KEY_FILE, (size_t)len, "КЛЮЧ");
     if (key.empty()) return;
 
     cout << "\n";
-    printSep();
+    print_sep();
     cout << "  Длина ключа : " << len << " байт (" << len * 8 << " бит)\n";
     cout << "  Файл        : " << KEY_FILE << "\n";
-    printSep();
+    print_sep();
 }
 
 // =============================================================================
@@ -312,16 +308,15 @@ static void modeKeyGen() {
 
 void runBlowfish() {
     cout << "\n";
-    printSep('=');
+    print_sep('=');
     cout << "  Blowfish — симметричный блочный шифр\n";
     cout << "  Блок: 64 бит | Ключ: 32-448 бит | Раундов: 16 | Режим: CBC\n";
-    printSep('=');
+    print_sep('=');
 
-    // ── Загружаем динамическую библиотеку ────────────────────────────────────
     BlowfishModule mod;
-    if (!mod.load(LIB_PATH)) {
+    if (!blowfish_load(&mod, LIB_PATH)) {
         cout << "\n  [!] Не удалось загрузить библиотеку: " << LIB_PATH << "\n";
-        cout << "  Причина: " << mod.lastError() << "\n";
+        cout << "  Причина: " << blowfish_last_error(&mod) << "\n";
         cout << "  Убедитесь что " << LIB_PATH << " находится рядом с программой.\n";
         return;
     }
@@ -334,7 +329,7 @@ void runBlowfish() {
         cout << "    2. Зашифровать / расшифровать файл\n";
         cout << "    3. Сгенерировать ключ\n";
         cout << "    0. Вернуться в главное меню\n\n";
-        printSep();
+        print_sep();
         cout << "  Выбор: ";
 
         int choice = 0;
@@ -347,7 +342,7 @@ void runBlowfish() {
         }
 
         if (choice == 3) {
-            modeKeyGen();
+            mode_key_gen();
             continue;
         }
 
@@ -356,18 +351,16 @@ void runBlowfish() {
             continue;
         }
 
-        // Загружаем ключ из файла
-        vector<uint8_t> keyBytes = loadFromFile(KEY_FILE, "КЛЮЧ");
+        vector<uint8_t> keyBytes = bf_ui_load_from_file(KEY_FILE, "КЛЮЧ");
         if (keyBytes.empty()) {
             cout << "\n  [!] Файл ключа не найден: " << KEY_FILE << "\n";
             cout << "  Сначала сгенерируйте ключ (пункт 3).\n";
             continue;
         }
 
-        // Создаём объект Blowfish через библиотеку (handle — непрозрачный указатель)
         BlowfishHandle handle = mod.create();
         if (handle == nullptr) {
-            cout << "\n  [!] Не удалось создать объект Blowfish в библиотеке.\n";
+            cout << "\n  [!] Не удалось создать контекст Blowfish в библиотеке.\n";
             continue;
         }
 
@@ -378,10 +371,9 @@ void runBlowfish() {
         }
         cout << "  [OK] Ключ загружен. Key Schedule выполнен.\n";
 
-        if (choice == 1) modeText(mod, handle);
-        else             modeFile(mod, handle);
+        if (choice == 1) mode_text(mod, handle);
+        else             mode_file(mod, handle);
 
-        // Освобождаем объект Blowfish после использования
         mod.destroy(handle);
     }
 }

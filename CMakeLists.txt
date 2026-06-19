@@ -16,7 +16,8 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 #  Модуль TEA — динамическая библиотека (tea.dll на Windows, tea.so на Linux)
 #
 #  SHARED означает .dll/.so. Внутрь идут только algo/ и capi/ —
-#  чистый алгоритм + C-обёртка. UI и main сюда не входят.
+#  чистый алгоритм (свободные функции + struct TeaKey) + C-обёртка.
+#  Классов нет. UI и main сюда не входят.
 # =============================================================================
 
 add_library(tea SHARED
@@ -29,18 +30,19 @@ target_include_directories(tea PRIVATE
     TEA/capi
 )
 
-# tea_capi.h сам активирует __declspec(dllexport) через TEA_BUILD_DLL,
-# но определение TEA_BUILD_DLL должно прийти именно при сборке ЭТОЙ библиотеки
+# TEA_BUILD_DLL определён в начале tea_capi.cpp через #define —
+# отдельная compile_definition здесь не нужна, но оставляем для совместимости
+# с Windows, где символы .dll нужно явно помечать dllexport.
 target_compile_definitions(tea PRIVATE TEA_BUILD_DLL)
 
-# Убираем префикс "lib" на Linux, чтобы файл назывался tea.so, а не libtea.so —
-# это нужно, потому что наш загрузчик ищет файл с именем "tea" без префикса
+# Убираем префикс "lib" на Linux, чтобы файл назывался tea.so, а не libtea.so
 set_target_properties(tea PROPERTIES PREFIX "")
 
 # =============================================================================
 #  Модуль Blowfish — динамическая библиотека (blowfish.dll / blowfish.so)
 #
 #  Та же логика что и у TEA: внутрь идут только algo/ и capi/.
+#  Классов нет. Используются свободные функции bf_* + struct BFKey.
 # =============================================================================
 
 add_library(blowfish SHARED
@@ -53,7 +55,7 @@ target_include_directories(blowfish PRIVATE
     Blowfish/capi
 )
 
-# Аналогично TEA_BUILD_DLL — активирует __declspec(dllexport) в blowfish_capi.h
+# BLOWFISH_BUILD_DLL определён в начале blowfish_capi.cpp через #define
 target_compile_definitions(blowfish PRIVATE BLOWFISH_BUILD_DLL)
 
 # Убираем префикс "lib" на Linux — файл должен называться blowfish.so
@@ -63,8 +65,8 @@ set_target_properties(blowfish PROPERTIES PREFIX "")
 #  Главная программа — app.exe / app
 #
 #  Внутрь идёт main.cpp + весь UI-слой каждого шифра + общий загрузчик
-#  динамических библиотек (core/). algo/ и capi/ сюда НЕ входят —
-#  они есть только внутри соответствующих .dll/.so.
+#  динамических библиотек (core/).
+#  algo/ и capi/ сюда НЕ входят — они есть только внутри .dll/.so.
 # =============================================================================
 
 add_executable(app
@@ -84,10 +86,10 @@ target_include_directories(app PRIVATE
     core
 
     TEA/ui
-    TEA/capi          # нужен tea_capi.h для TeaHandle, TEA_BLOCK_BYTES и т.д.
+    TEA/capi          # нужен tea_capi.h для TEAHandle, TEA_BLOCK_BYTES и т.д.
 
     Blowfish/ui
-    Blowfish/capi      # нужен blowfish_capi.h для BlowfishHandle, BLOWFISH_KEY_MIN и т.д.
+    Blowfish/capi     # нужен blowfish_capi.h для BlowfishHandle, BLOWFISH_KEY_MIN и т.д.
 )
 
 # ── Платформенные зависимости ─────────────────────────────────────────────────
@@ -101,10 +103,7 @@ else()
 endif()
 
 # =============================================================================
-#  Гарантируем порядок сборки: библиотеки собираются раньше app —
-#  хотя на этапе компиляции они не зависят друг от друга (только в рантайме),
-#  это удобно для ясности и чтобы .dll/.so точно лежали в папке сборки
-#  к моменту, когда app.exe будет готов для первого запуска.
+#  Гарантируем порядок сборки: библиотеки собираются раньше app
 # =============================================================================
 
 add_dependencies(app tea)
@@ -116,6 +115,6 @@ add_dependencies(app blowfish)
 
 message(STATUS "")
 message(STATUS "  rgz_kfs: сборка настроена.")
-message(STATUS "  После сборки app.exe (или app), tea.dll/.so и blowfish.dll/.so")
+message(STATUS "  После сборки app (или app.exe), tea.so/.dll и blowfish.so/.dll")
 message(STATUS "  окажутся в одной папке: ${CMAKE_BINARY_DIR}")
 message(STATUS "")

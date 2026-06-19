@@ -1,16 +1,14 @@
 #include "blowfish.h"
 
-#include <stdexcept>
 #include <cstring>
-
-using namespace std;
+#include <algorithm>
 
 // =============================================================================
 //  Константы инициализации — дробные части числа π
 //  Источник: оригинальная спецификация Blowfish (Брюс Шнайер, 1993)
 // =============================================================================
 
-const uint32_t Blowfish::INIT_P[Blowfish::P_ARRAY_SIZE] = {
+const uint32_t BF_INIT_P[BF_P_ARRAY_SIZE] = {
     0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344,
     0xa4093822, 0x299f31d0, 0x082efa98, 0xec4e6c89,
     0x452821e6, 0x38d01377, 0xbe5466cf, 0x34e90c6c,
@@ -18,7 +16,7 @@ const uint32_t Blowfish::INIT_P[Blowfish::P_ARRAY_SIZE] = {
     0x9216d5d9, 0x8979fb1b
 };
 
-const uint32_t Blowfish::INIT_S[Blowfish::S_BOX_COUNT][Blowfish::S_BOX_SIZE] = {
+const uint32_t BF_INIT_S[BF_S_BOX_COUNT][BF_S_BOX_SIZE] = {
 {
     // S[0]
     0xd1310ba6, 0x98dfb5ac, 0x2ffd72db, 0xd01adfb7,
@@ -290,195 +288,212 @@ const uint32_t Blowfish::INIT_S[Blowfish::S_BOX_COUNT][Blowfish::S_BOX_SIZE] = {
 };
 
 // =============================================================================
-//  Конструктор
+//  Вспомогательные функции — упаковка/распаковка блока (big-endian)
+//  static: видны только внутри этого .cpp
 // =============================================================================
 
-Blowfish::Blowfish() {
-    memcpy(P, INIT_P, sizeof(P));
-    memcpy(S, INIT_S, sizeof(S));
-}
-
-// =============================================================================
-//  Key Schedule — расширение ключа
-// =============================================================================
-
-bool Blowfish::setKey(const vector<uint8_t>& key) {
-    if (key.size() < KEY_MIN || key.size() > KEY_MAX)
-        return false;
-
-    memcpy(P, INIT_P, sizeof(P));
-    memcpy(S, INIT_S, sizeof(S));
-
-    // XOR P-массива с ключом (циклически)
-    int keyLen = static_cast<int>(key.size());
-    int keyPos = 0;
-    for (int i = 0; i < P_ARRAY_SIZE; i++) {
-        uint32_t word = 0;
-        for (int b = 0; b < 4; b++) {
-            word = (word << 8) | key[keyPos % keyLen];
-            keyPos++;
-        }
-        P[i] ^= word;
-    }
-
-    // Шифруем нулевой блок и переписываем P и S
-    uint32_t L = 0, R = 0;
-
-    for (int i = 0; i < P_ARRAY_SIZE; i += 2) {
-        encryptBlock(L, R);
-        P[i]     = L;
-        P[i + 1] = R;
-    }
-    for (int box = 0; box < S_BOX_COUNT; box++) {
-        for (int j = 0; j < S_BOX_SIZE; j += 2) {
-            encryptBlock(L, R);
-            S[box][j]     = L;
-            S[box][j + 1] = R;
-        }
-    }
-
-    m_keyIsSet = true;
-    return true;
-}
-
-// =============================================================================
-//  Вспомогательные функции — упаковка/распаковка блока
-// =============================================================================
-
-void Blowfish::packBlock(uint32_t L, uint32_t R, uint8_t* out) {
+static void bf_pack_block(uint32_t L, uint32_t R, uint8_t* out) {
     out[0] = (L >> 24) & 0xFF; out[1] = (L >> 16) & 0xFF;
     out[2] = (L >>  8) & 0xFF; out[3] = (L      ) & 0xFF;
     out[4] = (R >> 24) & 0xFF; out[5] = (R >> 16) & 0xFF;
     out[6] = (R >>  8) & 0xFF; out[7] = (R      ) & 0xFF;
 }
 
-void Blowfish::unpackBlock(const uint8_t* in, uint32_t& L, uint32_t& R) {
-    L = (uint32_t(in[0]) << 24) | (uint32_t(in[1]) << 16)
-      | (uint32_t(in[2]) <<  8) |  uint32_t(in[3]);
-    R = (uint32_t(in[4]) << 24) | (uint32_t(in[5]) << 16)
-      | (uint32_t(in[6]) <<  8) |  uint32_t(in[7]);
-}
-
-// =============================================================================
-//  Функция F
-// =============================================================================
-
-uint32_t Blowfish::F(uint32_t x) const {
-    const uint8_t a = (x >> 24) & 0xFF;
-    const uint8_t b = (x >> 16) & 0xFF;
-    const uint8_t c = (x >>  8) & 0xFF;
-    const uint8_t d = (x      ) & 0xFF;
-    return ((S[0][a] + S[1][b]) ^ S[2][c]) + S[3][d];
-}
-
-// =============================================================================
-//  encryptBlock / decryptBlock
-// =============================================================================
-
-void Blowfish::encryptBlock(uint32_t& L, uint32_t& R) const {
-    for (int i = 0; i < ROUNDS; i++) {
-        L ^= P[i];
-        R ^= F(L);
-        swap(L, R);
-    }
-    swap(L, R);
-    R ^= P[ROUNDS];
-    L ^= P[ROUNDS + 1];
-}
-
-void Blowfish::decryptBlock(uint32_t& L, uint32_t& R) const {
-    for (int i = ROUNDS + 1; i > 1; i--) {
-        L ^= P[i];
-        R ^= F(L);
-        swap(L, R);
-    }
-    swap(L, R);
-    R ^= P[1];
-    L ^= P[0];
+static void bf_unpack_block(const uint8_t* in, uint32_t* L, uint32_t* R) {
+    *L = (uint32_t(in[0]) << 24) | (uint32_t(in[1]) << 16)
+       | (uint32_t(in[2]) <<  8) |  uint32_t(in[3]);
+    *R = (uint32_t(in[4]) << 24) | (uint32_t(in[5]) << 16)
+       | (uint32_t(in[6]) <<  8) |  uint32_t(in[7]);
 }
 
 // =============================================================================
 //  PKCS#7 паддинг
+//  static: видны только внутри этого .cpp
 // =============================================================================
 
-vector<uint8_t> Blowfish::pkcs7Pad(const vector<uint8_t>& data) {
-    uint8_t padLen = BLOCK_BYTES - (data.size() % BLOCK_BYTES);
-    vector<uint8_t> padded(data);
-    padded.insert(padded.end(), padLen, padLen);
+static std::vector<uint8_t> bf_pkcs7_pad(const std::vector<uint8_t>& data) {
+    uint8_t pad_len = (uint8_t)(BF_BLOCK_BYTES - (data.size() % BF_BLOCK_BYTES));
+    std::vector<uint8_t> padded(data);
+    padded.insert(padded.end(), pad_len, pad_len);
     return padded;
 }
 
-vector<uint8_t> Blowfish::pkcs7Unpad(const vector<uint8_t>& data) {
-    if (data.empty() || data.size() % BLOCK_BYTES != 0)
-        throw runtime_error("Blowfish: неверный размер данных при снятии паддинга");
+static std::vector<uint8_t> bf_pkcs7_unpad(const std::vector<uint8_t>& data) {
+    if (data.empty() || data.size() % BF_BLOCK_BYTES != 0)
+        return {};
 
-    uint8_t padLen = data.back();
-    if (padLen == 0 || padLen > BLOCK_BYTES)
-        throw runtime_error("Blowfish: повреждён PKCS#7 паддинг");
+    uint8_t pad_len = data.back();
+    if (pad_len == 0 || pad_len > BF_BLOCK_BYTES)
+        return {};
 
-    for (size_t i = data.size() - padLen; i < data.size(); i++) {
-        if (data[i] != padLen)
-            throw runtime_error("Blowfish: неверный PKCS#7 паддинг (возможно, неверный ключ)");
+    for (size_t i = data.size() - pad_len; i < data.size(); ++i) {
+        if (data[i] != pad_len)
+            return {};
     }
-    return vector<uint8_t>(data.begin(), data.end() - padLen);
+    return std::vector<uint8_t>(data.begin(), data.end() - pad_len);
 }
 
 // =============================================================================
-//  CBC-режим
+//  Функция F — нелинейное преобразование через S-блоки
+//  static: видна только внутри этого .cpp
 // =============================================================================
 
-vector<uint8_t> Blowfish::encryptCBC(const vector<uint8_t>& plaintext,
-                                      const vector<uint8_t>& iv) const {
-    if (!m_keyIsSet)
-        throw runtime_error("Blowfish: ключ не установлен");
-    if (iv.size() != BLOCK_BYTES)
-        throw runtime_error("Blowfish: IV должен быть ровно 8 байт");
+static uint32_t bf_f(const BFKey* bk, uint32_t x) {
+    const uint8_t a = (x >> 24) & 0xFF;
+    const uint8_t b = (x >> 16) & 0xFF;
+    const uint8_t c = (x >>  8) & 0xFF;
+    const uint8_t d = (x      ) & 0xFF;
+    return ((bk->S[0][a] + bk->S[1][b]) ^ bk->S[2][c]) + bk->S[3][d];
+}
 
-    vector<uint8_t> padded = pkcs7Pad(plaintext);
-    vector<uint8_t> cipher(padded.size());
+// =============================================================================
+//  bf_key_init — сбросить структуру в начальное состояние (таблицы π)
+// =============================================================================
 
-    uint8_t prev[BLOCK_BYTES];
-    memcpy(prev, iv.data(), BLOCK_BYTES);
+void bf_key_init(BFKey* bk) {
+    if (bk == nullptr) return;
+    memcpy(bk->P, BF_INIT_P, sizeof(bk->P));
+    memcpy(bk->S, BF_INIT_S, sizeof(bk->S));
+    bk->ready = false;
+}
 
-    for (size_t offset = 0; offset < padded.size(); offset += BLOCK_BYTES) {
-        uint8_t block[BLOCK_BYTES];
-        for (int b = 0; b < BLOCK_BYTES; b++)
+// =============================================================================
+//  bf_key_set — загрузить ключ и выполнить Key Schedule
+// =============================================================================
+
+bool bf_key_set(BFKey* bk, const uint8_t* key, int keyLen) {
+    if (bk == nullptr || key == nullptr)          return false;
+    if (keyLen < BF_KEY_MIN || keyLen > BF_KEY_MAX) return false;
+
+    // Сбрасываем в начальные таблицы π
+    memcpy(bk->P, BF_INIT_P, sizeof(bk->P));
+    memcpy(bk->S, BF_INIT_S, sizeof(bk->S));
+
+    // XOR P-массива с ключом (циклически)
+    int keyPos = 0;
+    for (int i = 0; i < BF_P_ARRAY_SIZE; ++i) {
+        uint32_t word = 0;
+        for (int b = 0; b < 4; ++b) {
+            word = (word << 8) | key[keyPos % keyLen];
+            keyPos++;
+        }
+        bk->P[i] ^= word;
+    }
+
+    // Шифруем нулевой блок и переписываем P и S
+    uint32_t L = 0, R = 0;
+
+    for (int i = 0; i < BF_P_ARRAY_SIZE; i += 2) {
+        bf_encrypt_block(bk, &L, &R);
+        bk->P[i]     = L;
+        bk->P[i + 1] = R;
+    }
+    for (int box = 0; box < BF_S_BOX_COUNT; ++box) {
+        for (int j = 0; j < BF_S_BOX_SIZE; j += 2) {
+            bf_encrypt_block(bk, &L, &R);
+            bk->S[box][j]     = L;
+            bk->S[box][j + 1] = R;
+        }
+    }
+
+    bk->ready = true;
+    return true;
+}
+
+// =============================================================================
+//  bf_encrypt_block — шифрование одного 64-битного блока (16 раундов Фейстеля)
+// =============================================================================
+
+void bf_encrypt_block(const BFKey* bk, uint32_t* L, uint32_t* R) {
+    for (int i = 0; i < BF_ROUNDS; ++i) {
+        *L ^= bk->P[i];
+        *R ^= bf_f(bk, *L);
+        std::swap(*L, *R);
+    }
+    std::swap(*L, *R);
+    *R ^= bk->P[BF_ROUNDS];
+    *L ^= bk->P[BF_ROUNDS + 1];
+}
+
+// =============================================================================
+//  bf_decrypt_block — дешифрование одного 64-битного блока
+// =============================================================================
+
+void bf_decrypt_block(const BFKey* bk, uint32_t* L, uint32_t* R) {
+    for (int i = BF_ROUNDS + 1; i > 1; --i) {
+        *L ^= bk->P[i];
+        *R ^= bf_f(bk, *L);
+        std::swap(*L, *R);
+    }
+    std::swap(*L, *R);
+    *R ^= bk->P[1];
+    *L ^= bk->P[0];
+}
+
+// =============================================================================
+//  bf_cbc_encrypt — шифрование в режиме CBC + PKCS#7 паддинг
+// =============================================================================
+
+std::vector<uint8_t> bf_cbc_encrypt(
+    const BFKey*                bk,
+    const std::vector<uint8_t>& plaintext,
+    const uint8_t*              iv)
+{
+    if (bk == nullptr || !bk->ready || iv == nullptr)
+        return {};
+
+    std::vector<uint8_t> padded = bf_pkcs7_pad(plaintext);
+    std::vector<uint8_t> cipher(padded.size());
+
+    uint8_t prev[BF_BLOCK_BYTES];
+    memcpy(prev, iv, BF_BLOCK_BYTES);
+
+    for (size_t offset = 0; offset < padded.size(); offset += BF_BLOCK_BYTES) {
+        uint8_t block[BF_BLOCK_BYTES];
+        for (int b = 0; b < BF_BLOCK_BYTES; ++b)
             block[b] = padded[offset + b] ^ prev[b];
 
         uint32_t L, R;
-        unpackBlock(block, L, R);
-        encryptBlock(L, R);
-        packBlock(L, R, &cipher[offset]);
-        memcpy(prev, &cipher[offset], BLOCK_BYTES);
+        bf_unpack_block(block, &L, &R);
+        bf_encrypt_block(bk, &L, &R);
+        bf_pack_block(L, R, &cipher[offset]);
+
+        memcpy(prev, &cipher[offset], BF_BLOCK_BYTES);
     }
     return cipher;
 }
 
-vector<uint8_t> Blowfish::decryptCBC(const vector<uint8_t>& ciphertext,
-                                      const vector<uint8_t>& iv) const {
-    if (!m_keyIsSet)
-        throw runtime_error("Blowfish: ключ не установлен");
-    if (iv.size() != BLOCK_BYTES)
-        throw runtime_error("Blowfish: IV должен быть ровно 8 байт");
-    if (ciphertext.empty() || ciphertext.size() % BLOCK_BYTES != 0)
-        throw runtime_error("Blowfish: размер шифротекста не кратен 8 байтам");
+// =============================================================================
+//  bf_cbc_decrypt — дешифрование в режиме CBC, снятие PKCS#7 паддинга
+// =============================================================================
 
-    vector<uint8_t> padded(ciphertext.size());
+std::vector<uint8_t> bf_cbc_decrypt(
+    const BFKey*                bk,
+    const std::vector<uint8_t>& ciphertext,
+    const uint8_t*              iv)
+{
+    if (bk == nullptr || !bk->ready || iv == nullptr)
+        return {};
+    if (ciphertext.empty() || ciphertext.size() % BF_BLOCK_BYTES != 0)
+        return {};
 
-    uint8_t prev[BLOCK_BYTES];
-    memcpy(prev, iv.data(), BLOCK_BYTES);
+    std::vector<uint8_t> padded(ciphertext.size());
 
-    for (size_t offset = 0; offset < ciphertext.size(); offset += BLOCK_BYTES) {
+    uint8_t prev[BF_BLOCK_BYTES];
+    memcpy(prev, iv, BF_BLOCK_BYTES);
+
+    for (size_t offset = 0; offset < ciphertext.size(); offset += BF_BLOCK_BYTES) {
         uint32_t L, R;
-        unpackBlock(&ciphertext[offset], L, R);
-        decryptBlock(L, R);
+        bf_unpack_block(&ciphertext[offset], &L, &R);
+        bf_decrypt_block(bk, &L, &R);
 
-        uint8_t block[BLOCK_BYTES];
-        packBlock(L, R, block);
-        for (int b = 0; b < BLOCK_BYTES; b++)
+        uint8_t block[BF_BLOCK_BYTES];
+        bf_pack_block(L, R, block);
+
+        for (int b = 0; b < BF_BLOCK_BYTES; ++b)
             padded[offset + b] = block[b] ^ prev[b];
 
-        memcpy(prev, &ciphertext[offset], BLOCK_BYTES);
+        memcpy(prev, &ciphertext[offset], BF_BLOCK_BYTES);
     }
-    return pkcs7Unpad(padded);
+    return bf_pkcs7_unpad(padded);
 }
