@@ -2,39 +2,38 @@
 
 #include <stdexcept>
 #include <cstring>
+#include <algorithm>
 
 using namespace std;
 
+// =============================================================================
+//  Внутренние вспомогательные функции (видны только в этом файле)
+// =============================================================================
 
-
-RC5::RC5() {
-    memset(m_S, 0, sizeof(m_S));
-}
-
-
-
-uint32_t RC5::rotl(uint32_t x, uint32_t s) {
-    s &= (W - 1);
+// Циклический сдвиг влево на s позиций для 32-битного слова.
+static uint32_t rc5Rotl(uint32_t x, uint32_t s) {
+    s &= (RC5_W - 1);
     if (s == 0) return x;
-    return (x << s) | (x >> (W - s));
+    return (x << s) | (x >> (RC5_W - s));
 }
 
-uint32_t RC5::rotr(uint32_t x, uint32_t s) {
-    s &= (W - 1);
+// Циклический сдвиг вправо на s позиций для 32-битного слова.
+static uint32_t rc5Rotr(uint32_t x, uint32_t s) {
+    s &= (RC5_W - 1);
     if (s == 0) return x;
-    return (x >> s) | (x << (W - s));
+    return (x >> s) | (x << (RC5_W - s));
 }
 
-
-
-void RC5::packBlock(uint32_t A, uint32_t B, uint8_t* out) {
+// Упаковать два uint32_t в 8 байт (little-endian — стандарт для RC5).
+static void rc5PackBlock(uint32_t A, uint32_t B, uint8_t* out) {
     out[0] = (A      ) & 0xFF; out[1] = (A >>  8) & 0xFF;
     out[2] = (A >> 16) & 0xFF; out[3] = (A >> 24) & 0xFF;
     out[4] = (B      ) & 0xFF; out[5] = (B >>  8) & 0xFF;
     out[6] = (B >> 16) & 0xFF; out[7] = (B >> 24) & 0xFF;
 }
 
-void RC5::unpackBlock(const uint8_t* in, uint32_t& A, uint32_t& B) {
+// Распаковать 8 байт в два uint32_t (little-endian).
+static void rc5UnpackBlock(const uint8_t* in, uint32_t& A, uint32_t& B) {
     A =  uint32_t(in[0])
       | (uint32_t(in[1]) <<  8)
       | (uint32_t(in[2]) << 16)
@@ -45,89 +44,21 @@ void RC5::unpackBlock(const uint8_t* in, uint32_t& A, uint32_t& B) {
       | (uint32_t(in[7]) << 24);
 }
 
-
-
-void RC5::expandKey(const vector<uint8_t>& key) {
-    const int b = static_cast<int>(key.size()); 
-    const int u = W / 8;                        
-    const int c = (b + u - 1) / u;              
-
-    
-    vector<uint32_t> L(c, 0);
-    for (int i = b - 1; i >= 0; i--)
-        L[i / u] = (L[i / u] << 8) + key[i];
-
-   
-    m_S[0] = P32;
-    for (int i = 1; i < TABLE_SIZE; i++)
-        m_S[i] = m_S[i - 1] + Q32;
-
-  
-    uint32_t A = 0, B = 0;
-    int i = 0, j = 0;
-    int iterations = 3 * max(TABLE_SIZE, c);
-
-    for (int k = 0; k < iterations; k++) {
-        m_S[i] = rotl(m_S[i] + A + B, 3);
-        A = m_S[i];
-        i = (i + 1) % TABLE_SIZE;
-
-        L[j] = rotl(L[j] + A + B, (A + B) & (W - 1));
-        B = L[j];
-        j = (j + 1) % c;
-    }
-}
-
-
-
-bool RC5::setKey(const vector<uint8_t>& key) {
-    if (key.empty() || key.size() > 255)
-        return false;
-
-    expandKey(key);
-    m_keyIsSet = true;
-    return true;
-}
-
-
-
-void RC5::encryptBlock(uint32_t& A, uint32_t& B) const {
-    A = A + m_S[0];
-    B = B + m_S[1];
-
-    for (int i = 1; i <= ROUNDS; i++) {
-        A = rotl(A ^ B, B) + m_S[2 * i];
-        B = rotl(B ^ A, A) + m_S[2 * i + 1];
-    }
-}
-
-
-
-void RC5::decryptBlock(uint32_t& A, uint32_t& B) const {
-    for (int i = ROUNDS; i >= 1; i--) {
-        B = rotr(B - m_S[2 * i + 1], A) ^ A;
-        A = rotr(A - m_S[2 * i],     B) ^ B;
-    }
-
-    B = B - m_S[1];
-    A = A - m_S[0];
-}
-
-
-
-vector<uint8_t> RC5::pkcs7Pad(const vector<uint8_t>& data) {
-    uint8_t padLen = static_cast<uint8_t>(BLOCK_BYTES - (data.size() % BLOCK_BYTES));
+// PKCS#7: дополнить до кратности RC5_BLOCK_LEN.
+static vector<uint8_t> rc5Pkcs7Pad(const vector<uint8_t>& data) {
+    uint8_t padLen = static_cast<uint8_t>(RC5_BLOCK_LEN - (data.size() % RC5_BLOCK_LEN));
     vector<uint8_t> padded(data);
     padded.insert(padded.end(), padLen, padLen);
     return padded;
 }
 
-vector<uint8_t> RC5::pkcs7Unpad(const vector<uint8_t>& data) {
-    if (data.empty() || data.size() % BLOCK_BYTES != 0)
+// PKCS#7: снять паддинг. Бросает runtime_error при нарушении формата.
+static vector<uint8_t> rc5Pkcs7Unpad(const vector<uint8_t>& data) {
+    if (data.empty() || data.size() % RC5_BLOCK_LEN != 0)
         throw runtime_error("RC5: неверный размер данных при снятии паддинга");
 
     uint8_t padLen = data.back();
-    if (padLen == 0 || padLen > BLOCK_BYTES)
+    if (padLen == 0 || padLen > RC5_BLOCK_LEN)
         throw runtime_error("RC5: повреждён PKCS#7 паддинг");
 
     for (size_t i = data.size() - padLen; i < data.size(); i++) {
@@ -137,63 +68,147 @@ vector<uint8_t> RC5::pkcs7Unpad(const vector<uint8_t>& data) {
     return vector<uint8_t>(data.begin(), data.end() - padLen);
 }
 
+// Развернуть ключ в таблицу sched.S через алгоритм ключевого расписания RC5.
+static void rc5ExpandKey(Rc5KeySchedule& sched, const vector<uint8_t>& key) {
+    const int b = static_cast<int>(key.size()); // длина ключа в байтах
+    const int u = RC5_W / 8;                    // байт на слово (4 для RC5-32)
+    const int c = (b + u - 1) / u;               // слов в массиве L[]
 
+    // ── Шаг 1: заполнить L[] ──────────────────────────────────────────────────
+    vector<uint32_t> L(c, 0);
+    for (int i = b - 1; i >= 0; i--)
+        L[i / u] = (L[i / u] << 8) + key[i];
 
-vector<uint8_t> RC5::encryptCBC(const vector<uint8_t>& plaintext,
-                                 const vector<uint8_t>& iv) const {
-    if (!m_keyIsSet)
+    // ── Шаг 2: инициализировать S[] ───────────────────────────────────────────
+    sched.S[0] = RC5_P32;
+    for (int i = 1; i < RC5_TABLE_SIZE; i++)
+        sched.S[i] = sched.S[i - 1] + RC5_Q32;
+
+    // ── Шаг 3: перемешивание (3 × max(TABLE_SIZE, c) итераций) ───────────────
+    uint32_t A = 0, B = 0;
+    int i = 0, j = 0;
+    int iterations = 3 * max(RC5_TABLE_SIZE, c);
+
+    for (int k = 0; k < iterations; k++) {
+        sched.S[i] = rc5Rotl(sched.S[i] + A + B, 3);
+        A = sched.S[i];
+        i = (i + 1) % RC5_TABLE_SIZE;
+
+        L[j] = rc5Rotl(L[j] + A + B, (A + B) & (RC5_W - 1));
+        B = L[j];
+        j = (j + 1) % c;
+    }
+}
+
+// =============================================================================
+//  Публичные функции — объявлены в rc5.h
+// =============================================================================
+
+void rc5InitSchedule(Rc5KeySchedule& sched) {
+    memset(sched.S, 0, sizeof(sched.S));
+    sched.keyIsSet = false;
+}
+
+bool rc5SetKey(Rc5KeySchedule& sched, const vector<uint8_t>& key) {
+    if (key.empty() || key.size() > 255)
+        return false;
+
+    rc5ExpandKey(sched, key);
+    sched.keyIsSet = true;
+    return true;
+}
+
+// ── encryptBlock / decryptBlock ───────────────────────────────────────────────
+//
+//  Алгоритм RC5-32/12:
+//    A = A + S[0];  B = B + S[1]
+//    для i = 1..r:
+//      A = ((A XOR B) <<< B) + S[2i]
+//      B = ((B XOR A) <<< A) + S[2i+1]
+//
+//  Расшифровка — строго обратные операции.
+
+void rc5EncryptBlock(const Rc5KeySchedule& sched, uint32_t& A, uint32_t& B) {
+    A = A + sched.S[0];
+    B = B + sched.S[1];
+
+    for (int i = 1; i <= RC5_ROUNDS; i++) {
+        A = rc5Rotl(A ^ B, B) + sched.S[2 * i];
+        B = rc5Rotl(B ^ A, A) + sched.S[2 * i + 1];
+    }
+}
+
+void rc5DecryptBlock(const Rc5KeySchedule& sched, uint32_t& A, uint32_t& B) {
+    for (int i = RC5_ROUNDS; i >= 1; i--) {
+        B = rc5Rotr(B - sched.S[2 * i + 1], A) ^ A;
+        A = rc5Rotr(A - sched.S[2 * i],     B) ^ B;
+    }
+
+    B = B - sched.S[1];
+    A = A - sched.S[0];
+}
+
+// =============================================================================
+//  CBC-режим
+// =============================================================================
+
+vector<uint8_t> rc5EncryptCBC(const Rc5KeySchedule& sched,
+                               const vector<uint8_t>& plaintext,
+                               const vector<uint8_t>& iv) {
+    if (!sched.keyIsSet)
         throw runtime_error("RC5: ключ не установлен");
-    if (iv.size() != BLOCK_BYTES)
+    if (iv.size() != RC5_BLOCK_LEN)
         throw runtime_error("RC5: IV должен быть ровно 8 байт");
 
-    vector<uint8_t> padded = pkcs7Pad(plaintext);
+    vector<uint8_t> padded = rc5Pkcs7Pad(plaintext);
     vector<uint8_t> cipher(padded.size());
 
-    uint8_t prev[BLOCK_BYTES];
-    memcpy(prev, iv.data(), BLOCK_BYTES);
+    uint8_t prev[RC5_BLOCK_LEN];
+    memcpy(prev, iv.data(), RC5_BLOCK_LEN);
 
-    for (size_t offset = 0; offset < padded.size(); offset += BLOCK_BYTES) {
+    for (size_t offset = 0; offset < padded.size(); offset += RC5_BLOCK_LEN) {
         // XOR с предыдущим шифроблоком (или IV)
-        uint8_t block[BLOCK_BYTES];
-        for (int b = 0; b < BLOCK_BYTES; b++)
+        uint8_t block[RC5_BLOCK_LEN];
+        for (int b = 0; b < RC5_BLOCK_LEN; b++)
             block[b] = padded[offset + b] ^ prev[b];
 
         uint32_t A, B;
-        unpackBlock(block, A, B);
-        encryptBlock(A, B);
-        packBlock(A, B, &cipher[offset]);
+        rc5UnpackBlock(block, A, B);
+        rc5EncryptBlock(sched, A, B);
+        rc5PackBlock(A, B, &cipher[offset]);
 
-        memcpy(prev, &cipher[offset], BLOCK_BYTES);
+        memcpy(prev, &cipher[offset], RC5_BLOCK_LEN);
     }
     return cipher;
 }
 
-vector<uint8_t> RC5::decryptCBC(const vector<uint8_t>& ciphertext,
-                                 const vector<uint8_t>& iv) const {
-    if (!m_keyIsSet)
+vector<uint8_t> rc5DecryptCBC(const Rc5KeySchedule& sched,
+                               const vector<uint8_t>& ciphertext,
+                               const vector<uint8_t>& iv) {
+    if (!sched.keyIsSet)
         throw runtime_error("RC5: ключ не установлен");
-    if (iv.size() != BLOCK_BYTES)
+    if (iv.size() != RC5_BLOCK_LEN)
         throw runtime_error("RC5: IV должен быть ровно 8 байт");
-    if (ciphertext.empty() || ciphertext.size() % BLOCK_BYTES != 0)
+    if (ciphertext.empty() || ciphertext.size() % RC5_BLOCK_LEN != 0)
         throw runtime_error("RC5: размер шифротекста не кратен 8 байтам");
 
     vector<uint8_t> padded(ciphertext.size());
 
-    uint8_t prev[BLOCK_BYTES];
-    memcpy(prev, iv.data(), BLOCK_BYTES);
+    uint8_t prev[RC5_BLOCK_LEN];
+    memcpy(prev, iv.data(), RC5_BLOCK_LEN);
 
-    for (size_t offset = 0; offset < ciphertext.size(); offset += BLOCK_BYTES) {
+    for (size_t offset = 0; offset < ciphertext.size(); offset += RC5_BLOCK_LEN) {
         uint32_t A, B;
-        unpackBlock(&ciphertext[offset], A, B);
-        decryptBlock(A, B);
+        rc5UnpackBlock(&ciphertext[offset], A, B);
+        rc5DecryptBlock(sched, A, B);
 
-        uint8_t block[BLOCK_BYTES];
-        packBlock(A, B, block);
+        uint8_t block[RC5_BLOCK_LEN];
+        rc5PackBlock(A, B, block);
 
-        for (int b = 0; b < BLOCK_BYTES; b++)
+        for (int b = 0; b < RC5_BLOCK_LEN; b++)
             padded[offset + b] = block[b] ^ prev[b];
 
-        memcpy(prev, &ciphertext[offset], BLOCK_BYTES);
+        memcpy(prev, &ciphertext[offset], RC5_BLOCK_LEN);
     }
-    return pkcs7Unpad(padded);
+    return rc5Pkcs7Unpad(padded);
 }
