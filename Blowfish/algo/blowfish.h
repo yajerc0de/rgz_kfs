@@ -1,93 +1,70 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
 #include <vector>
 
-using namespace std;
-
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
 //  Blowfish — симметричный блочный шифр (Брюс Шнайер, 1993)
 //  Размер блока : 64 бит (два uint32_t — L и R)
 //  Длина ключа  : 32–448 бит (4–56 байт)
 //  Раундов      : 16
 //  Режим        : CBC + PKCS#7 паддинг
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
 
-class Blowfish {
-public:
-    // ── Константы ─────────────────────────────────────────────────────────────
-    static constexpr int ROUNDS       = 16;
-    static constexpr int P_ARRAY_SIZE = ROUNDS + 2;   // P[0..17]
-    static constexpr int S_BOX_COUNT  = 4;
-    static constexpr int S_BOX_SIZE   = 256;
-    static constexpr int BLOCK_BYTES  = 8;            // 64 бит = 8 байт
-    static constexpr int KEY_MIN      = 4;            // байт
-    static constexpr int KEY_MAX      = 56;           // байт
+// ── Константы ─────────────────────────────────────────────────────────────────
+static constexpr int BF_ROUNDS        = 16;
+static constexpr int BF_P_ARRAY_SIZE  = BF_ROUNDS + 2;  // P[0..17]
+static constexpr int BF_S_BOX_COUNT   = 4;
+static constexpr int BF_S_BOX_SIZE    = 256;
+static constexpr int BF_BLOCK_BYTES   = 8;               // 64 бит = 8 байт
+static constexpr int BF_KEY_MIN       = 4;               // байт
+static constexpr int BF_KEY_MAX       = 56;              // байт
 
-    // ── Жизненный цикл ────────────────────────────────────────────────────────
-
-    Blowfish();
-
-    // Загрузить ключ и выполнить Key Schedule.
-    // key — сырые байты, длина KEY_MIN..KEY_MAX.
-    // Возвращает false если длина ключа вне допустимого диапазона.
-    bool setKey(const vector<uint8_t>& key);
-
-    // ── Блочные операции (открытый интерфейс для тестирования) ────────────────
-
-    // Зашифровать один блок: изменяет L и R на месте.
-    void encryptBlock(uint32_t& L, uint32_t& R) const;
-
-    // Расшифровать один блок: изменяет L и R на месте.
-    void decryptBlock(uint32_t& L, uint32_t& R) const;
-
-    // ── CBC-режим (произвольная длина данных) ─────────────────────────────────
-
-    // Зашифровать данные в режиме CBC.
-    // iv — вектор инициализации, ровно BLOCK_BYTES байт.
-    // Применяет PKCS#7 паддинг, возвращает шифротекст.
-    vector<uint8_t> encryptCBC(const vector<uint8_t>& plaintext,
-                                const vector<uint8_t>& iv) const;
-
-    // Расшифровать данные в режиме CBC.
-    // Снимает PKCS#7 паддинг, возвращает исходный открытый текст.
-    // Бросает runtime_error при повреждённых данных или неверном паддинге.
-    vector<uint8_t> decryptCBC(const vector<uint8_t>& ciphertext,
-                                const vector<uint8_t>& iv) const;
-
-private:
-    // ── Внутреннее состояние ──────────────────────────────────────────────────
-
-    uint32_t P[P_ARRAY_SIZE];
-    uint32_t S[S_BOX_COUNT][S_BOX_SIZE];
-
-    bool     m_keyIsSet = false;
-
-    // ── Вспомогательные методы ────────────────────────────────────────────────
-
-    // Функция F — нелинейное преобразование 32-битного слова через S-блоки.
-    uint32_t F(uint32_t x) const;
-
-    // PKCS#7: дополнить данные до кратности BLOCK_BYTES.
-    static vector<uint8_t> pkcs7Pad(const vector<uint8_t>& data);
-
-    // PKCS#7: убрать паддинг. Бросает runtime_error при нарушении формата.
-    static vector<uint8_t> pkcs7Unpad(const vector<uint8_t>& data);
-
-    // Упаковать/распаковать два uint32_t в/из 8 байт (big-endian).
-    static void   packBlock  (uint32_t L, uint32_t R, uint8_t* out);
-    static void   unpackBlock(const uint8_t* in, uint32_t& L, uint32_t& R);
-
-    // ── Константы инициализации (дробные части π) ─────────────────────────────
-    // Объявлены как static — хранятся один раз для всей программы.
-
-    static const uint32_t INIT_P[P_ARRAY_SIZE];
-    static const uint32_t INIT_S[S_BOX_COUNT][S_BOX_SIZE];
+// ── Внутреннее состояние (ключ + S-блоки после Key Schedule) ─────────────────
+// Используется только в algo/ — capi/ не включает этот заголовок напрямую.
+struct BFKey {
+    uint32_t P[BF_P_ARRAY_SIZE];
+    uint32_t S[BF_S_BOX_COUNT][BF_S_BOX_SIZE];
+    bool     ready;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Точка входа из main.cpp
-//  Реализована в blowfish.cpp — показывает меню: текст / файл / генератор ключа
-// ─────────────────────────────────────────────────────────────────────────────
-void runBlowfish();
+// ── Таблицы инициализации (дробные части π) ───────────────────────────────────
+// Объявлены extern — определены в blowfish.cpp одним экземпляром.
+extern const uint32_t BF_INIT_P[BF_P_ARRAY_SIZE];
+extern const uint32_t BF_INIT_S[BF_S_BOX_COUNT][BF_S_BOX_SIZE];
+
+// ── Инициализация ─────────────────────────────────────────────────────────────
+
+// Сбросить структуру BFKey в начальное состояние (таблицы π, ready = false).
+void bf_key_init(BFKey* bk);
+
+// Загрузить ключ и выполнить Key Schedule.
+// key — сырые байты, длина BF_KEY_MIN..BF_KEY_MAX.
+// Возвращает false если key == nullptr или длина вне допустимого диапазона.
+bool bf_key_set(BFKey* bk, const uint8_t* key, int keyLen);
+
+// ── Блочные операции ──────────────────────────────────────────────────────────
+
+// Зашифровать один 64-битный блок. Изменяет L и R на месте.
+void bf_encrypt_block(const BFKey* bk, uint32_t* L, uint32_t* R);
+
+// Расшифровать один 64-битный блок. Изменяет L и R на месте.
+void bf_decrypt_block(const BFKey* bk, uint32_t* L, uint32_t* R);
+
+// ── CBC-режим (произвольная длина данных) ─────────────────────────────────────
+
+// Зашифровать данные в режиме CBC + PKCS#7 паддинг.
+// iv — вектор инициализации, ровно BF_BLOCK_BYTES байт.
+// Возвращает зашифрованный вектор или пустой вектор при ошибке.
+std::vector<uint8_t> bf_cbc_encrypt(
+    const BFKey*               bk,
+    const std::vector<uint8_t>& plaintext,
+    const uint8_t*              iv);
+
+// Расшифровать данные в режиме CBC, снять PKCS#7 паддинг.
+// Возвращает открытый текст или пустой вектор при ошибке
+// (неверный паддинг, неверный ключ, повреждённые данные).
+std::vector<uint8_t> bf_cbc_decrypt(
+    const BFKey*               bk,
+    const std::vector<uint8_t>& ciphertext,
+    const uint8_t*              iv);

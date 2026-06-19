@@ -2,9 +2,6 @@
 
 #include <cstdint>
 #include <vector>
-#include <string>
-
-using namespace std;
 
 // =============================================================================
 //  TEA — Tiny Encryption Algorithm (Уилер и Нидхэм, 1994)
@@ -14,65 +11,51 @@ using namespace std;
 //  Режим        : CBC + PKCS#7 паддинг
 // =============================================================================
 
-class TEA {
-public:
-    // ── Константы ─────────────────────────────────────────────────────────────
-    static constexpr uint32_t DELTA      = 0x9e3779b9; // дробная часть золотого сечения
-    static constexpr int      ROUNDS     = 32;          // циклов (каждый = 2 раунда Фейстеля)
-    static constexpr int      KEY_WORDS  = 4;           // ключ: 4 × uint32_t
-    static constexpr int      KEY_BYTES  = KEY_WORDS * sizeof(uint32_t); // 16 байт = 128 бит
-    static constexpr int      BLOCK_BYTES = 8;          // 64 бит = 8 байт
+// ── Константы ─────────────────────────────────────────────────────────────────
+static constexpr uint32_t TEA_DELTA       = 0x9e3779b9u; // дробная часть золотого сечения
+static constexpr int      TEA_ROUNDS      = 32;           // циклов (каждый = 2 раунда Фейстеля)
+static constexpr int      TEA_KEY_WORDS   = 4;            // ключ: 4 × uint32_t
+static constexpr int      TEA_KEY_BYTES   = TEA_KEY_WORDS * 4; // 16 байт = 128 бит
+static constexpr int      TEA_BLOCK_BYTES_ALGO = 8;       // 64 бит = 8 байт
 
-    // ── Жизненный цикл ────────────────────────────────────────────────────────
-
-    TEA();
-
-    // Загрузить ключ (ровно 16 байт).
-    // Возвращает false если длина ключа не равна KEY_BYTES.
-    bool setKey(const vector<uint8_t>& key);
-
-    // ── Блочные операции ──────────────────────────────────────────────────────
-
-    // Зашифровать один блок: изменяет v0 и v1 на месте.
-    void encryptBlock(uint32_t& v0, uint32_t& v1) const;
-
-    // Расшифровать один блок: изменяет v0 и v1 на месте.
-    void decryptBlock(uint32_t& v0, uint32_t& v1) const;
-
-    // ── CBC-режим (произвольная длина данных) ─────────────────────────────────
-
-    // Зашифровать данные в режиме CBC + PKCS#7 паддинг.
-    // iv — вектор инициализации, ровно BLOCK_BYTES байт.
-    vector<uint8_t> encryptCBC(const vector<uint8_t>& plaintext,
-                                const vector<uint8_t>& iv) const;
-
-    // Расшифровать данные в режиме CBC, снять PKCS#7 паддинг.
-    // Бросает runtime_error при повреждённых данных или неверном паддинге.
-    vector<uint8_t> decryptCBC(const vector<uint8_t>& ciphertext,
-                                const vector<uint8_t>& iv) const;
-
-private:
-    // ── Внутреннее состояние ──────────────────────────────────────────────────
-
-    uint32_t m_key[KEY_WORDS] = {0, 0, 0, 0};
-    bool     m_keyIsSet       = false;
-
-    // ── Вспомогательные методы ────────────────────────────────────────────────
-
-    // PKCS#7: дополнить до кратности BLOCK_BYTES.
-    static vector<uint8_t> pkcs7Pad(const vector<uint8_t>& data);
-
-    // PKCS#7: снять паддинг. Бросает runtime_error при нарушении формата.
-    static vector<uint8_t> pkcs7Unpad(const vector<uint8_t>& data);
-
-    // Упаковать два uint32_t в 8 байт (big-endian).
-    static void packBlock(uint32_t v0, uint32_t v1, uint8_t* out);
-
-    // Распаковать 8 байт в два uint32_t (big-endian).
-    static void unpackBlock(const uint8_t* in, uint32_t& v0, uint32_t& v1);
+// ── Внутреннее состояние (ключ), заполняется через tea_algo_set_key() ─────────
+// Используется только в algo/ — capi/ не включает этот заголовок напрямую.
+struct TeaKey {
+    uint32_t k[TEA_KEY_WORDS];
+    bool     ready;
 };
 
-// =============================================================================
-//  Точка входа из main.cpp
-// =============================================================================
-void runTEA();
+// ── Инициализация ─────────────────────────────────────────────────────────────
+
+// Заполнить структуру TeaKey нулями (состояние "ключ не установлен").
+void tea_key_init(TeaKey* tk);
+
+// Загрузить ключ из массива байт (ровно TEA_KEY_BYTES = 16 байт, big-endian).
+// Возвращает false если key == nullptr или keyLen != TEA_KEY_BYTES.
+bool tea_key_set(TeaKey* tk, const uint8_t* key, int keyLen);
+
+// ── Блочные операции ──────────────────────────────────────────────────────────
+
+// Зашифровать один 64-битный блок. Изменяет v0 и v1 на месте.
+void tea_encrypt_block(const TeaKey* tk, uint32_t* v0, uint32_t* v1);
+
+// Расшифровать один 64-битный блок. Изменяет v0 и v1 на месте.
+void tea_decrypt_block(const TeaKey* tk, uint32_t* v0, uint32_t* v1);
+
+// ── CBC-режим (произвольная длина данных) ─────────────────────────────────────
+
+// Зашифровать данные в режиме CBC + PKCS#7 паддинг.
+// iv — вектор инициализации, ровно TEA_BLOCK_BYTES_ALGO байт.
+// Возвращает зашифрованный вектор или пустой вектор при ошибке.
+std::vector<uint8_t> tea_cbc_encrypt(
+    const TeaKey*              tk,
+    const std::vector<uint8_t>& plaintext,
+    const uint8_t*              iv);
+
+// Расшифровать данные в режиме CBC, снять PKCS#7 паддинг.
+// Возвращает открытый текст или пустой вектор при ошибке
+// (неверный паддинг, неверный ключ, повреждённые данные).
+std::vector<uint8_t> tea_cbc_decrypt(
+    const TeaKey*              tk,
+    const std::vector<uint8_t>& ciphertext,
+    const uint8_t*              iv);

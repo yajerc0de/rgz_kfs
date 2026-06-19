@@ -3,65 +3,62 @@
 #include "../../core/loader.h"
 #include "../capi/tea_capi.h"
 
-// =============================================================================
-//  tea_module_api.h — обёртка над DynamicLibrary специально для TEA
-//
-//  Загружает tea.dll/tea.so и достаёт оттуда все нужные функции через
-//  GetProcAddress/dlsym, сохраняя их как указатели на функции.
-//  tea_ui.cpp использует ТОЛЬКО этот класс — никакого прямого знания
-//  о классе TEA или способе его реализации.
-// =============================================================================
+#include <string>
 
 // ── Сигнатуры функций — должны точно совпадать с tea_capi.h ──────────────────
 
-typedef TeaHandle (*TeaCreateFn)();
-typedef void      (*TeaDestroyFn)(TeaHandle);
-typedef int       (*TeaSetKeyFn)(TeaHandle, const uint8_t*, size_t);
-typedef int       (*TeaEncryptCbcFn)(TeaHandle, const uint8_t*, size_t,
+typedef TEAHandle (*TEACreateFn)();
+typedef void      (*TEADestroyFn)(TEAHandle);
+typedef int       (*TEASetKeyFn)(TEAHandle, const uint8_t*, size_t);
+typedef int       (*TEAEncryptCbcFn)(TEAHandle, const uint8_t*, size_t,
                                       const uint8_t*, uint8_t**, size_t*);
-typedef int       (*TeaDecryptCbcFn)(TeaHandle, const uint8_t*, size_t,
+typedef int       (*TEADecryptCbcFn)(TEAHandle, const uint8_t*, size_t,
                                       const uint8_t*, uint8_t**, size_t*);
-typedef void      (*TeaFreeBufferFn)(uint8_t*);
+typedef void      (*TEAFreeBufferFn)(uint8_t*);
 
-class TeaModule {
-public:
-    // Загрузить библиотеку по пути и достать все символы.
-    // Возвращает false если библиотека не найдена или каких-то функций нет внутри.
-    bool load(const string& libPath);
+// =============================================================================
+//  TEAModule — struct с указателями на функции из tea.dll / tea.so.
+//  Аналог AESModule из aes_module_api.h.
+//  Никакой логики внутри struct — только данные.
+// =============================================================================
 
-    // Загружена ли библиотека и все её функции успешно найдены.
-    bool isReady() const;
+struct TEAModule {
+    DynamicLibrary library;
 
-    // Текст последней ошибки.
-    const string& lastError() const;
+    TEACreateFn     create     = nullptr;
+    TEADestroyFn    destroy    = nullptr;
+    TEASetKeyFn     setKey     = nullptr;
+    TEAEncryptCbcFn encryptCbc = nullptr;
+    TEADecryptCbcFn decryptCbc = nullptr;
+    TEAFreeBufferFn freeBuffer = nullptr;
 
-    // ── Указатели на функции — вызываются напрямую как tea.create() и т.п. ────
-    TeaCreateFn      create      = nullptr;
-    TeaDestroyFn     destroy     = nullptr;
-    TeaSetKeyFn      setKey      = nullptr;
-    TeaEncryptCbcFn  encryptCbc  = nullptr;
-    TeaDecryptCbcFn  decryptCbc  = nullptr;
-    TeaFreeBufferFn  freeBuffer  = nullptr;
-
-private:
-    DynamicLibrary m_lib;
-    string         m_lastError;
-
-    // Достать один символ и привести к нужному типу функции.
-    // Возвращает false и заполняет m_lastError если символ не найден.
-    template <typename FnPtr>
-    bool bindSymbol(const string& name, FnPtr& target);
+    std::string lastError;
 };
 
-// ── Реализация шаблонного метода — должна быть в заголовке ───────────────────
+// ── Свободные функции для работы с TEAModule ─────────────────────────────────
 
-template <typename FnPtr>
-bool TeaModule::bindSymbol(const string& name, FnPtr& target) {
-    void* sym = m_lib.getSymbol(name);
+// Загрузить библиотеку по пути и привязать все символы.
+// Возвращает false если библиотека не найдена или символ отсутствует.
+bool tea_load(TEAModule* module, const std::string& path);
+
+// Все указатели заполнены и готовы к использованию.
+bool tea_is_ready(const TEAModule* module);
+
+// Текст последней ошибки.
+const std::string& tea_last_error(const TEAModule* module);
+
+// ── Шаблонная вспомогательная функция привязки символа ───────────────────────
+// Реализация в заголовке — как в aes_module_api.h.
+
+template<typename FnPtr>
+bool tea_bind_symbol(TEAModule* module, const std::string& name, FnPtr& target) {
+    void* sym = module->library.getSymbol(name);
+
     if (sym == nullptr) {
-        m_lastError = "Не найден символ в библиотеке: " + name;
+        module->lastError = "Не найден символ: " + name;
         return false;
     }
+
     target = reinterpret_cast<FnPtr>(sym);
     return true;
 }

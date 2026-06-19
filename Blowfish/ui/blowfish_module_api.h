@@ -1,67 +1,64 @@
 #pragma once
 
 #include "../../core/loader.h"
-#include "blowfish_capi.h"
+#include "../capi/blowfish_capi.h"
 
-// =============================================================================
-//  blowfish_module_api.h — обёртка над DynamicLibrary специально для Blowfish
-//
-//  Загружает blowfish.dll/blowfish.so и достаёт оттуда все нужные функции
-//  через GetProcAddress/dlsym, сохраняя их как указатели на функции.
-//  blowfish_ui.cpp использует ТОЛЬКО этот класс — никакого прямого знания
-//  о классе Blowfish или способе его реализации.
-// =============================================================================
+#include <string>
 
-// ── Сигнатуры функций — должны точно совпадать с blowfish_capi.h ─────────────
+// ── Сигнатуры функций — должны точно совпадать с blowfish_capi.h ──────────────
 
 typedef BlowfishHandle (*BlowfishCreateFn)();
 typedef void           (*BlowfishDestroyFn)(BlowfishHandle);
-typedef int             (*BlowfishSetKeyFn)(BlowfishHandle, const uint8_t*, size_t);
-typedef int             (*BlowfishEncryptCbcFn)(BlowfishHandle, const uint8_t*, size_t,
-                                                 const uint8_t*, uint8_t**, size_t*);
-typedef int             (*BlowfishDecryptCbcFn)(BlowfishHandle, const uint8_t*, size_t,
-                                                 const uint8_t*, uint8_t**, size_t*);
-typedef void            (*BlowfishFreeBufferFn)(uint8_t*);
+typedef int            (*BlowfishSetKeyFn)(BlowfishHandle, const uint8_t*, size_t);
+typedef int            (*BlowfishEncryptCbcFn)(BlowfishHandle, const uint8_t*, size_t,
+                                                const uint8_t*, uint8_t**, size_t*);
+typedef int            (*BlowfishDecryptCbcFn)(BlowfishHandle, const uint8_t*, size_t,
+                                                const uint8_t*, uint8_t**, size_t*);
+typedef void           (*BlowfishFreeBufferFn)(uint8_t*);
 
-class BlowfishModule {
-public:
-    // Загрузить библиотеку по пути и достать все символы.
-    // Возвращает false если библиотека не найдена или каких-то функций нет внутри.
-    bool load(const string& libPath);
+// =============================================================================
+//  BlowfishModule — struct с указателями на функции из blowfish.dll / blowfish.so.
+//  Аналог AESModule из aes_module_api.h и TEAModule из tea_module_api.h.
+//  Никакой логики внутри struct — только данные.
+// =============================================================================
 
-    // Загружена ли библиотека и все её функции успешно найдены.
-    bool isReady() const;
+struct BlowfishModule {
+    DynamicLibrary library;
 
-    // Текст последней ошибки.
-    const string& lastError() const;
+    BlowfishCreateFn     create     = nullptr;
+    BlowfishDestroyFn    destroy    = nullptr;
+    BlowfishSetKeyFn     setKey     = nullptr;
+    BlowfishEncryptCbcFn encryptCbc = nullptr;
+    BlowfishDecryptCbcFn decryptCbc = nullptr;
+    BlowfishFreeBufferFn freeBuffer = nullptr;
 
-    // ── Указатели на функции — вызываются напрямую как mod.create() и т.п. ────
-    BlowfishCreateFn      create      = nullptr;
-    BlowfishDestroyFn     destroy     = nullptr;
-    BlowfishSetKeyFn      setKey      = nullptr;
-    BlowfishEncryptCbcFn  encryptCbc  = nullptr;
-    BlowfishDecryptCbcFn  decryptCbc  = nullptr;
-    BlowfishFreeBufferFn  freeBuffer  = nullptr;
-
-private:
-    DynamicLibrary m_lib;
-    string         m_lastError;
-
-    // Достать один символ и привести к нужному типу функции.
-    // Возвращает false и заполняет m_lastError если символ не найден.
-    template <typename FnPtr>
-    bool bindSymbol(const string& name, FnPtr& target);
+    std::string lastError;
 };
 
-// ── Реализация шаблонного метода — должна быть в заголовке ───────────────────
+// ── Свободные функции для работы с BlowfishModule ────────────────────────────
 
-template <typename FnPtr>
-bool BlowfishModule::bindSymbol(const string& name, FnPtr& target) {
-    void* sym = m_lib.getSymbol(name);
+// Загрузить библиотеку по пути и привязать все символы.
+// Возвращает false если библиотека не найдена или символ отсутствует.
+bool blowfish_load(BlowfishModule* module, const std::string& path);
+
+// Все указатели заполнены и готовы к использованию.
+bool blowfish_is_ready(const BlowfishModule* module);
+
+// Текст последней ошибки.
+const std::string& blowfish_last_error(const BlowfishModule* module);
+
+// ── Шаблонная вспомогательная функция привязки символа ───────────────────────
+// Реализация в заголовке — как в aes_module_api.h и tea_module_api.h.
+
+template<typename FnPtr>
+bool blowfish_bind_symbol(BlowfishModule* module, const std::string& name, FnPtr& target) {
+    void* sym = module->library.getSymbol(name);
+
     if (sym == nullptr) {
-        m_lastError = "Не найден символ в библиотеке: " + name;
+        module->lastError = "Не найден символ: " + name;
         return false;
     }
+
     target = reinterpret_cast<FnPtr>(sym);
     return true;
 }
