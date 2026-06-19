@@ -1,6 +1,6 @@
 #pragma once
 
-#include "aes_export.h"
+#include "../capi/aes_capi.h"
 
 // Нелинейная таблица замен (S-Box)
 extern AES_API const unsigned char s_box[256];

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "aes_export.h"
+#include "../capi/aes_capi.h"
 #include <vector>
 
 // Шифрование данных в режиме CBC.
