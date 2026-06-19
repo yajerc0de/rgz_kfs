@@ -184,12 +184,12 @@ static void modeKeyGen() {
     generateAndSave(IV_FILE, 16, "IV");
 }
 
-int main() {
+void runSpeck() {
     SpeckModule mod;
     if (!speckModuleLoad(mod, LIB_PATH)) {
         cout << "  [!] Критическая ошибка загрузки модуля: " << LIB_PATH << "\n";
         cout << "  " << mod.lastError << "\n";
-        return 1;
+        return;
     }
 
     bool running = true;
@@ -250,5 +250,5 @@ int main() {
         mod.destroy(handle);
     }
 
-    return 0;
+
 }
