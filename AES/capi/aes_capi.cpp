@@ -1,3 +1,4 @@
+#define AES_BUILDING_LIB
 #include "aes_capi.h"
 
 #include "../algo/aes_core.h"
