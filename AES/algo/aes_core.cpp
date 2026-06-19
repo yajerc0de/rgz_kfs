@@ -1,4 +1,3 @@
-#define AES_BUILDING_LIB
 #include "aes_core.h"
 #include "aes_tables.h"
 

@@ -1,4 +1,3 @@
-#define AES_BUILDING_LIB
 #include "aes_tables.h"
 
 const unsigned char s_box[256] = {
