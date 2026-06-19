@@ -40,7 +40,7 @@ static void modeText(Rc5Module& mod, Rc5Handle handle) {
         string text;
         getline(cin, text);
 
-        vector<uint8_t> iv = generateAndSave(IV_FILE, RC5_BLOCK_BYTES, "IV");
+        vector<uint8_t> iv = rc5_generateAndSave(IV_FILE, RC5_BLOCK_BYTES, "IV");
         if (iv.empty()) return;
 
         vector<uint8_t> plain(text.begin(), text.end());
@@ -61,7 +61,7 @@ static void modeText(Rc5Module& mod, Rc5Handle handle) {
 
         cout << "\n";
         printSep();
-        cout << "  Шифротекст (HEX): " << bytesToHex(cipher) << "\n";
+        cout << "  Шифротекст (HEX): " << rc5_bytesToHex(cipher) << "\n";
         cout << "  IV сохранён в   : " << IV_FILE  << "\n";
         cout << "  Ключ сохранён в : " << KEY_FILE << "\n";
         printSep();
@@ -72,14 +72,14 @@ static void modeText(Rc5Module& mod, Rc5Handle handle) {
         cin >> hexCipher;
         cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
-        vector<uint8_t> iv = loadFromFile(IV_FILE, "IV");
+        vector<uint8_t> iv = rc5_loadFromFile(IV_FILE, "IV");
         if (iv.empty() || iv.size() != RC5_BLOCK_BYTES) {
             cout << "\n  [!] Неверный IV в файле " << IV_FILE << "\n";
             return;
         }
 
         vector<uint8_t> cipher;
-        if (!hexToBytes(hexCipher, cipher)) {
+        if (!rc5_hexToBytes(hexCipher, cipher)) {
             cout << "\n  [!] Неверный формат шифротекста.\n";
             return;
         }
@@ -128,12 +128,12 @@ static void modeFile(Rc5Module& mod, Rc5Handle handle) {
         getline(cin, inPath);
 
         vector<uint8_t> plain;
-        if (!readFile(inPath, plain)) return;
+        if (!rc5_readFile(inPath, plain)) return;
 
         
-        string outPath = buildEncryptPath(inPath);
+        string outPath = rc5_buildEncryptPath(inPath);
 
-        vector<uint8_t> iv = generateAndSave(IV_FILE, RC5_BLOCK_BYTES, "IV");
+        vector<uint8_t> iv = rc5_generateAndSave(IV_FILE, RC5_BLOCK_BYTES, "IV");
         if (iv.empty()) return;
 
         uint8_t* outData = nullptr;
@@ -151,8 +151,8 @@ static void modeFile(Rc5Module& mod, Rc5Handle handle) {
         mod.freeBuffer(outData);
 
         
-        string originalName = extractFilename(inPath);
-        vector<uint8_t> nameHeader = packFilenameHeader(originalName);
+        string originalName = rc5_extractFilename(inPath);
+        vector<uint8_t> nameHeader = rc5_packFilenameHeader(originalName);
 
         
         vector<uint8_t> output;
@@ -160,7 +160,7 @@ static void modeFile(Rc5Module& mod, Rc5Handle handle) {
         output.insert(output.end(), iv.begin(),         iv.end());
         output.insert(output.end(), cipher.begin(),     cipher.end());
 
-        if (!writeFile(outPath, output)) return;
+        if (!rc5_writeFile(outPath, output)) return;
 
         cout << "\n";
         printSep();
@@ -180,12 +180,12 @@ static void modeFile(Rc5Module& mod, Rc5Handle handle) {
         getline(cin, inPath);
 
         vector<uint8_t> raw;
-        if (!readFile(inPath, raw)) return;
+        if (!rc5_readFile(inPath, raw)) return;
 
         
         string originalName;
         size_t headerSize = 0;
-        if (!unpackFilenameHeader(raw, originalName, headerSize)) {
+        if (!rc5_unpackFilenameHeader(raw, originalName, headerSize)) {
             cout << "\n  [!] Не удалось прочитать имя файла из метаданных.\n";
             cout << "  Файл повреждён или не был зашифрован этой программой.\n";
             return;
@@ -203,11 +203,11 @@ static void modeFile(Rc5Module& mod, Rc5Handle handle) {
                                 raw.end());
 
         
-        string outPath = buildDecryptPath(originalName);
+        string outPath = rc5_buildDecryptPath(originalName);
 
         cout << "  [ИМЯ] Восстановлено из метаданных: " << originalName << "\n";
         cout << "  [IV]  Извлечён из файла\n";
-        cout << "  [IV]  HEX: " << bytesToHex(iv) << "\n";
+        cout << "  [IV]  HEX: " << rc5_bytesToHex(iv) << "\n";
 
         uint8_t* outData = nullptr;
         size_t   outLen  = 0;
@@ -224,7 +224,7 @@ static void modeFile(Rc5Module& mod, Rc5Handle handle) {
         vector<uint8_t> plain(outData, outData + outLen);
         mod.freeBuffer(outData);
 
-        if (!writeFile(outPath, plain)) return;
+        if (!rc5_writeFile(outPath, plain)) return;
 
         cout << "\n";
         printSep();
@@ -262,7 +262,7 @@ static void modeKeyGen() {
             break;
     }
 
-    vector<uint8_t> key = generateAndSave(KEY_FILE, keyLen, "КЛЮЧ");
+    vector<uint8_t> key = rc5_generateAndSave(KEY_FILE, keyLen, "КЛЮЧ");
     if (key.empty()) return;
 
     cout << "\n";
@@ -321,7 +321,7 @@ void runRC5() {
         }
 
         
-        vector<uint8_t> keyBytes = loadFromFile(KEY_FILE, "КЛЮЧ");
+        vector<uint8_t> keyBytes = rc5_loadFromFile(KEY_FILE, "КЛЮЧ");
         if (keyBytes.empty()) {
             cout << "\n  [!] Файл ключа не найден: " << KEY_FILE << "\n";
             cout << "  Сначала сгенерируйте ключ (пункт 3).\n";

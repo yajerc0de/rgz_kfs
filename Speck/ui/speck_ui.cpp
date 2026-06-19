@@ -28,7 +28,7 @@ static void modeText(SpeckModule& mod, SpeckHandle handle) {
     cin >> action;
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
-    vector<uint8_t> ivBytes = loadFromFile(IV_FILE, "IV");
+    vector<uint8_t> ivBytes = speck_loadFromFile(IV_FILE, "IV");
     if (ivBytes.empty()) {
         cout << "  [!] Ошибка загрузки IV. Сначала выполните генерацию параметров.\n";
         return;
@@ -51,7 +51,7 @@ static void modeText(SpeckModule& mod, SpeckHandle handle) {
         vector<uint8_t> encBytes(outBuf, outBuf + outLen);
         mod.freeBuffer(outBuf);
 
-        string hexStr = bytesToHex(encBytes);
+        string hexStr = speck_bytesToHex(encBytes);
         cout << "  Результат (HEX): " << hexStr << "\n";
     } 
     else if (action == 2) {
@@ -59,7 +59,7 @@ static void modeText(SpeckModule& mod, SpeckHandle handle) {
         string hexStr;
         getline(cin, hexStr);
         vector<uint8_t> encBytes;
-        if (!hexToBytes(hexStr, encBytes)) {
+        if (!speck_hexToBytes(hexStr, encBytes)) {
             cout << "  [!] Некорректный формат HEX.\n";
             return;
         }
@@ -88,7 +88,7 @@ static void modeFile(SpeckModule& mod, SpeckHandle handle) {
     cin >> action;
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
-    vector<uint8_t> ivBytes = loadFromFile(IV_FILE, "IV");
+    vector<uint8_t> ivBytes = speck_loadFromFile(IV_FILE, "IV");
     if (ivBytes.empty()) {
         cout << "  [!] Ошибка загрузки IV. Сначала выполните генерацию параметров.\n";
         return;
@@ -99,13 +99,13 @@ static void modeFile(SpeckModule& mod, SpeckHandle handle) {
         string srcPath;
         getline(cin, srcPath);
         vector<uint8_t> fileData;
-        if (!readFile(srcPath, fileData)) {
+        if (!speck_readFile(srcPath, fileData)) {
             cout << "  [!] Не удалось прочитать файл.\n";
             return;
         }
 
-        string pureName = extractFilename(srcPath);
-        vector<uint8_t> header = packFilenameHeader(pureName);
+        string pureName = speck_extractFilename(srcPath);
+        vector<uint8_t> header = speck_packFilenameHeader(pureName);
         vector<uint8_t> fullPayload;
         fullPayload.reserve(header.size() + fileData.size());
         fullPayload.insert(fullPayload.end(), header.begin(), header.end());
@@ -122,8 +122,8 @@ static void modeFile(SpeckModule& mod, SpeckHandle handle) {
         vector<uint8_t> encData(outBuf, outBuf + outLen);
         mod.freeBuffer(outBuf);
 
-        string destPath = buildEncryptPath(srcPath);
-        if (writeFile(destPath, encData)) {
+        string destPath = speck_buildEncryptPath(srcPath);
+        if (speck_writeFile(destPath, encData)) {
             cout << "  [OK] Файл успешно зашифрован и сохранён в: " << destPath << "\n";
         } else {
             cout << "  [!] Не удалось сохранить результат в файл.\n";
@@ -134,7 +134,7 @@ static void modeFile(SpeckModule& mod, SpeckHandle handle) {
         string encPath;
         getline(cin, encPath);
         vector<uint8_t> encData;
-        if (!readFile(encPath, encData)) {
+        if (!speck_readFile(encPath, encData)) {
             cout << "  [!] Не удалось прочитать файл.\n";
             return;
         }
@@ -152,14 +152,14 @@ static void modeFile(SpeckModule& mod, SpeckHandle handle) {
 
         string origName;
         size_t bytesConsumed = 0;
-        if (!unpackFilenameHeader(fullPayload, origName, bytesConsumed)) {
+        if (!speck_unpackFilenameHeader(fullPayload, origName, bytesConsumed)) {
             cout << "  [!] Ошибка разбора заголовка оригинального имени.\n";
             return;
         }
 
         vector<uint8_t> fileData(fullPayload.begin() + bytesConsumed, fullPayload.end());
-        string destPath = buildDecryptPath(origName);
-        if (writeFile(destPath, fileData)) {
+        string destPath = speck_buildDecryptPath(origName);
+        if (speck_writeFile(destPath, fileData)) {
             cout << "  [OK] Файл успешно расшифрован и сохранён под исходным именем: " << destPath << "\n";
         } else {
             cout << "  [!] Не удалось сохранить результат в файл.\n";
@@ -180,8 +180,8 @@ static void modeKeyGen() {
     if (kChoice == 2) kBytes = 24;
     else if (kChoice == 3) kBytes = 32;
 
-    generateAndSave(KEY_FILE, kBytes, "КЛЮЧ");
-    generateAndSave(IV_FILE, 16, "IV");
+    speck_generateAndSave(KEY_FILE, kBytes, "КЛЮЧ");
+    speck_generateAndSave(IV_FILE, 16, "IV");
 }
 
 void runSpeck() {
@@ -221,7 +221,7 @@ void runSpeck() {
             continue;
         }
 
-        vector<uint8_t> keyBytes = loadFromFile(KEY_FILE, "КЛЮЧ");
+        vector<uint8_t> keyBytes = speck_loadFromFile(KEY_FILE, "КЛЮЧ");
         if (keyBytes.empty()) {
             cout << "\n  [!] Файл ключа не найден: " << KEY_FILE << "\n";
             cout << "  Сначала сгенерируйте ключ (пункт 3).\n";

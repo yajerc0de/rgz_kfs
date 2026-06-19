@@ -4,53 +4,21 @@
 #include <vector>
 #include <cstdint>
 
-using namespace std;
-
-
-
-
-bool hexToBytes(const string& hex, vector<uint8_t>& out);
-
-
-string bytesToHex(const vector<uint8_t>& data);
-
-
-
-
-vector<uint8_t> randomBytes(size_t count);
-
-
-
-
-bool readFile(const string& path, vector<uint8_t>& data);
-
-
-bool writeFile(const string& path, const vector<uint8_t>& data);
-
-
-bool ensureDir(const string& dirPath);
-
-
-string extractFilename(const string& path);
-
-
-string buildEncryptPath(const string& sourcePath);
-
-
-string buildDecryptPath(const string& originalName);
-
-
-
-
-vector<uint8_t> packFilenameHeader(const string& originalFilename);
-
-
-bool unpackFilenameHeader(const vector<uint8_t>& data,
-                           string& originalFilename,
-                           size_t& bytesConsumed);
-
-
-vector<uint8_t> generateAndSave(const string& filepath, size_t byteCount, const string& label);
-
-
-vector<uint8_t> loadFromFile(const string& filepath, const string& label);
+bool rc5_hexToBytes(const std::string& hex, std::vector<uint8_t>& out);
+std::string rc5_bytesToHex(const std::vector<uint8_t>& data);
+std::vector<uint8_t> rc5_randomBytes(size_t count);
+bool rc5_readFile(const std::string& path, std::vector<uint8_t>& data);
+bool rc5_writeFile(const std::string& path, const std::vector<uint8_t>& data);
+bool rc5_ensureDir(const std::string& dirPath);
+std::string rc5_extractFilename(const std::string& path);
+std::string rc5_buildEncryptPath(const std::string& sourcePath);
+std::string rc5_buildDecryptPath(const std::string& originalName);
+std::vector<uint8_t> rc5_packFilenameHeader(const std::string& originalFilename);
+bool rc5_unpackFilenameHeader(const std::vector<uint8_t>& data,
+                               std::string& originalFilename,
+                               size_t& bytesConsumed);
+std::vector<uint8_t> rc5_generateAndSave(const std::string& filepath,
+                                          size_t byteCount,
+                                          const std::string& label);
+std::vector<uint8_t> rc5_loadFromFile(const std::string& filepath,
+                                       const std::string& label);

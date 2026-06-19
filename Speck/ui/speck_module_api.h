@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../../core/loader.h"
+#include "../../core/loader.h"
 #include "../capi/speck_capi.h"
 #include <string>
 

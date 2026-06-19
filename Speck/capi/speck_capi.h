@@ -17,7 +17,7 @@ extern "C" {
 
 typedef void* SpeckHandle;
 
-#define SPECK_BLOCK_BYTES 16
+#define SPECK_CAPI_BLOCK_BYTES 16
 
 SPECK_API SpeckHandle speck_create();
 
