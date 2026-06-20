@@ -20,6 +20,8 @@ static const string IV_FILE  = "tea_iv.bin";
 
 #ifdef _WIN32
 static const string LIB_PATH = "tea.dll";
+#elif defined(__APPLE__)
+static const string LIB_PATH = "./tea.dylib";
 #else
 static const string LIB_PATH = "./tea.so";
 #endif

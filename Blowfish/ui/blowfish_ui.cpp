@@ -22,6 +22,8 @@ static const string IV_FILE  = "blowfish_iv.bin";
 
 #ifdef _WIN32
 static const string LIB_PATH = "blowfish.dll";
+#elif defined(__APPLE__)
+static const string LIB_PATH = "./blowfish.dylib";
 #else
 static const string LIB_PATH = "./blowfish.so";
 #endif

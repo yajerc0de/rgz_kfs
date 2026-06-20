@@ -15,6 +15,8 @@ static const string IV_FILE  = "rc5_iv.bin";
 
 #ifdef _WIN32
 static const string LIB_PATH = "rc5.dll";
+#elif defined(__APPLE__)
+static const string LIB_PATH = "./rc5.dylib";
 #else
 static const string LIB_PATH = "./rc5.so";
 #endif

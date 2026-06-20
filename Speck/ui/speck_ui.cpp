@@ -11,6 +11,8 @@ static const string IV_FILE  = "speck_iv.bin";
 
 #ifdef _WIN32
 static const string LIB_PATH = "speck.dll";
+#elif defined(__APPLE__)
+static const string LIB_PATH = "./speck.dylib";
 #else
 static const string LIB_PATH = "./speck.so";
 #endif
