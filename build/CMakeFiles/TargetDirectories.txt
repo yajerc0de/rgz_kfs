@@ -1,0 +1,4 @@
+C:/Users/User/Desktop/Projects/rgz_kfs/build/CMakeFiles/tea.dir
+C:/Users/User/Desktop/Projects/rgz_kfs/build/CMakeFiles/app.dir
+C:/Users/User/Desktop/Projects/rgz_kfs/build/CMakeFiles/edit_cache.dir
+C:/Users/User/Desktop/Projects/rgz_kfs/build/CMakeFiles/rebuild_cache.dir

@@ -1,0 +1,80 @@
+#pragma once
+
+#include <string>
+#include <vector>
+#include <cstdint>
+
+// =============================================================================
+//  tea_utils.h — утилиты для модуля TEA
+//  Конвертация HEX, работа с файлами, генерация случайных байт.
+//
+//  Все функции имеют префикс tea_ — это заменяет namespace и исключает
+//  конфликты линковки при одновременном подключении нескольких шифров
+//  (TEA, Blowfish и др.) в одном .exe.
+// =============================================================================
+
+// ─── HEX ─────────────────────────────────────────────────────────────────────
+
+// Конвертировать hex-строку ("a1b2c3...") в вектор байт.
+// Возвращает false если строка содержит недопустимые символы или нечётная длина.
+bool tea_hex_to_bytes(const std::string& hex, std::vector<uint8_t>& out);
+
+// Конвертировать вектор байт в hex-строку нижнего регистра.
+std::string tea_bytes_to_hex(const std::vector<uint8_t>& data);
+
+// ─── Случайные байты ─────────────────────────────────────────────────────────
+
+// Сгенерировать count случайных байт через mt19937 + random_device.
+std::vector<uint8_t> tea_random_bytes(size_t count);
+
+// ─── Файлы ───────────────────────────────────────────────────────────────────
+
+// Считать содержимое файла в бинарном режиме.
+// При ошибке выводит сообщение в cout и возвращает false.
+bool tea_read_file(const std::string& path, std::vector<uint8_t>& data);
+
+// Записать байты в файл в бинарном режиме.
+// При ошибке выводит сообщение в cout и возвращает false.
+bool tea_write_file(const std::string& path, const std::vector<uint8_t>& data);
+
+// Создать папку если она не существует.
+// Возвращает false при ошибке создания.
+bool tea_ensure_dir(const std::string& dirPath);
+
+// Извлечь имя файла без пути (например "docs/test.txt" -> "test.txt").
+std::string tea_extract_filename(const std::string& path);
+
+// Собрать путь для зашифрованного файла.
+// Результат: Encryptfiles/encrypted_<имя файла без расширения>.bin
+std::string tea_build_encrypt_path(const std::string& sourcePath);
+
+// Собрать путь для расшифрованного файла.
+// originalName — оригинальное имя, извлечённое из метаданных внутри .bin файла.
+// Результат: Decryptfiles/decrypted_<originalName>
+std::string tea_build_decrypt_path(const std::string& originalName);
+
+// ─── Метаданные имени файла ───────────────────────────────────────────────────
+
+// Упаковать оригинальное имя файла в бинарный префикс:
+// [4 байта: длина имени (little-endian uint32_t)][N байт: имя файла UTF-8]
+std::vector<uint8_t> tea_pack_filename_header(const std::string& originalFilename);
+
+// Распаковать имя файла из начала буфера.
+// Возвращает true при успехе; originalFilename получает извлечённое имя,
+// bytesConsumed — сколько байт занял заголовок (4 + длина имени).
+bool tea_unpack_filename_header(const std::vector<uint8_t>& data,
+                                std::string& originalFilename,
+                                size_t& bytesConsumed);
+
+// ─── Ключи и IV ──────────────────────────────────────────────────────────────
+
+// Сгенерировать случайные байты, сохранить в файл и вывести HEX в консоль.
+// Возвращает сгенерированные байты или пустой вектор при ошибке.
+std::vector<uint8_t> tea_generate_and_save(const std::string& filepath,
+                                            size_t byteCount,
+                                            const std::string& label);
+
+// Загрузить байты из файла (ключ или IV).
+// При ошибке выводит сообщение и возвращает пустой вектор.
+std::vector<uint8_t> tea_load_from_file(const std::string& filepath,
+                                         const std::string& label);

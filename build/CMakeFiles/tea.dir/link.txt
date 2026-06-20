@@ -1,0 +1,3 @@
+"C:\Program Files\CMake\bin\cmake.exe" -E rm -f CMakeFiles\tea.dir/objects.a
+C:\msys64\ucrt64\bin\ar.exe qc CMakeFiles\tea.dir/objects.a @CMakeFiles\tea.dir\objects1.rsp
+C:\msys64\ucrt64\bin\c++.exe -shared -o tea.dll -Wl,--out-implib,libtea.dll.a -Wl,--major-image-version,0,--minor-image-version,0 -Wl,--whole-archive CMakeFiles\tea.dir/objects.a -Wl,--no-whole-archive @CMakeFiles\tea.dir\linkLibs.rsp
