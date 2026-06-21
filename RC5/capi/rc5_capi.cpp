@@ -1,6 +1,5 @@
 
 
-#define RC5_BUILD_DLL
 #include "rc5_capi.h"
 #include "../algo/rc5.h"
 

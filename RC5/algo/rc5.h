@@ -31,3 +31,26 @@ void rc5InitSchedule(Rc5KeySchedule& sched);
 
 
 bool rc5SetKey(Rc5KeySchedule& sched, const vector<uint8_t>& key);
+
+
+
+
+void rc5EncryptBlock(const Rc5KeySchedule& sched, uint32_t& A, uint32_t& B);
+
+
+void rc5DecryptBlock(const Rc5KeySchedule& sched, uint32_t& A, uint32_t& B);
+
+
+
+
+vector<uint8_t> rc5EncryptCBC(const Rc5KeySchedule& sched,
+                               const vector<uint8_t>& plaintext,
+                               const vector<uint8_t>& iv);
+
+
+vector<uint8_t> rc5DecryptCBC(const Rc5KeySchedule& sched,
+                               const vector<uint8_t>& ciphertext,
+                               const vector<uint8_t>& iv);
+
+
+void runRC5();

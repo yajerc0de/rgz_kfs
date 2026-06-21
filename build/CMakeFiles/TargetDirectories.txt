@@ -1,0 +1,4 @@
+/home/sergei/Рабочий стол/rgz_kfs/build/CMakeFiles/rc5.dir
+/home/sergei/Рабочий стол/rgz_kfs/build/CMakeFiles/app.dir
+/home/sergei/Рабочий стол/rgz_kfs/build/CMakeFiles/edit_cache.dir
+/home/sergei/Рабочий стол/rgz_kfs/build/CMakeFiles/rebuild_cache.dir
